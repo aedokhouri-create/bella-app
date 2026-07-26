@@ -3,7 +3,7 @@ services:
     name: bella-app
     env: node
     plan: starter
-    buildCommand: npm --prefix frontend install && npm --prefix frontend run build && npm --prefix backend install
+    buildCommand: npm --prefix frontend install --include=dev && npm --prefix frontend run build && npm --prefix backend install
     startCommand: node backend/src/server.js
     disk:
       name: bella-data
