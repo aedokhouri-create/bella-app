@@ -12,6 +12,14 @@ import {
   cofreListarNotas,
   cofreCriarNota,
   cofreApagarNota,
+  listarContatos,
+  criarContato,
+  apagarContato,
+  listarContas,
+  criarConta,
+  atualizarConta,
+  apagarConta,
+  backupInfo,
 } from "./api.js";
 
 const hojeChave = () => "nina_chat_" + new Date().toISOString().slice(0, 10);
@@ -37,15 +45,20 @@ const CATEGORIAS_COFRE = [
   "💰 Financeiro & Bancos",
   "📱 Apps & Tecnologia",
   "🔒 Acessos Físicos",
+  "🛡️ Seguros & Apólices",
+  "📜 Para minha família (em caso de necessidade)",
 ];
 
 export default function App() {
-  const [aba, setAba] = useState("conversa"); // conversa | tarefas
+  const [aba, setAba] = useState("conversa"); // conversa | tarefas | contatos | cofre
   const [tarefas, setTarefas] = useState([]);
+  const [contas, setContas] = useState([]);
   const [ttsOn, setTtsOn] = useState(true);
+  const [backupAberto, setBackupAberto] = useState(false);
 
   useEffect(() => {
     recarregarTarefas();
+    recarregarContas();
   }, []);
 
   async function recarregarTarefas() {
@@ -56,7 +69,16 @@ export default function App() {
     }
   }
 
+  async function recarregarContas() {
+    try {
+      setContas(await listarContas());
+    } catch {
+      /* offline: mantém o que tiver */
+    }
+  }
+
   const pendentes = tarefas.filter((t) => t.status !== "concluida").length;
+  const contasPendentes = contas.filter((c) => c.status !== "pago").length;
 
   return (
     <div className="app">
@@ -68,31 +90,49 @@ export default function App() {
             <small>seu assistente pessoal</small>
           </div>
         </div>
-        <button
-          className={"audio " + (ttsOn ? "on" : "")}
-          onClick={() => setTtsOn((v) => !v)}
-          title="Ligar/desligar a voz da assistente"
-        >
-          {ttsOn ? "🔊" : "🔇"}
-        </button>
+        <div className="topo-acoes">
+          <button className="backup-btn" onClick={() => setBackupAberto(true)} title="Backup dos dados">
+            💾
+          </button>
+          <button
+            className={"audio " + (ttsOn ? "on" : "")}
+            onClick={() => setTtsOn((v) => !v)}
+            title="Ligar/desligar a voz da assistente"
+          >
+            {ttsOn ? "🔊" : "🔇"}
+          </button>
+        </div>
       </header>
 
       <main className="conteudo">
         {aba === "conversa" && (
-          <Conversa ttsOn={ttsOn} aposCriarTarefa={recarregarTarefas} />
+          <Conversa ttsOn={ttsOn} aposCriarTarefa={recarregarTarefas} aposCriarConta={recarregarContas} />
         )}
         {aba === "tarefas" && (
-          <Tarefas tarefas={tarefas} recarregar={recarregarTarefas} setTarefas={setTarefas} />
+          <Agenda
+            tarefas={tarefas}
+            recarregarTarefas={recarregarTarefas}
+            setTarefas={setTarefas}
+            contas={contas}
+            recarregarContas={recarregarContas}
+            setContas={setContas}
+          />
         )}
         {aba === "cofre" && <Cofre />}
+        {aba === "contatos" && <Contatos />}
       </main>
+
+      {backupAberto && <PainelBackup fechar={() => setBackupAberto(false)} />}
 
       <nav className="abas">
         <button className={aba === "conversa" ? "ativa" : ""} onClick={() => setAba("conversa")}>
           💬 Conversa
         </button>
         <button className={aba === "tarefas" ? "ativa" : ""} onClick={() => setAba("tarefas")}>
-          ✅ Tarefas {pendentes > 0 && <span className="badge">{pendentes}</span>}
+          📅 Agenda {(pendentes + contasPendentes) > 0 && <span className="badge">{pendentes + contasPendentes}</span>}
+        </button>
+        <button className={aba === "contatos" ? "ativa" : ""} onClick={() => setAba("contatos")}>
+          📇 Contatos
         </button>
         <button className={aba === "cofre" ? "ativa" : ""} onClick={() => setAba("cofre")}>
           🔒 Cofre
@@ -103,7 +143,7 @@ export default function App() {
 }
 
 /* ---------------- Conversa (chat + voz) ---------------- */
-function Conversa({ ttsOn, aposCriarTarefa }) {
+function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
   const [mensagens, setMensagens] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(hojeChave())) || [];
@@ -165,13 +205,14 @@ function Conversa({ ttsOn, aposCriarTarefa }) {
     setMensagens((m) => [...m, { role: "user", text: msg }]);
     setOcupado(true);
     try {
-      const { reply, tarefas } = await enviarMensagem(msg, historico);
-      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas }]);
+      const { reply, tarefas, contas, acoesWhatsApp } = await enviarMensagem(msg, historico);
+      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp }]);
       falar(reply, () => {
         // Modo conversa: assim que ela termina de falar, volta a escutar sozinha.
         if (modoConversaRef.current) iniciarEscuta();
       });
       if (tarefas && tarefas.length) aposCriarTarefa();
+      if (contas && contas.length) aposCriarConta();
     } catch {
       setMensagens((m) => [
         ...m,
@@ -244,11 +285,34 @@ function Conversa({ ttsOn, aposCriarTarefa }) {
           <div key={i} className={"balao " + m.role}>
             <div className="txt">{m.text}</div>
             {m.tarefas?.map((t) => (
-              <div key={t.id} className="chip-tarefa">
+              <div key={"t" + t.id} className="chip-tarefa">
                 ✅ {t.titulo}
                 {t.data ? ` · ${formatarData(t.data)}` : ""}
                 {t.hora ? ` ${t.hora}` : ""}
               </div>
+            ))}
+            {m.contas?.map((c) => (
+              <div key={"c" + c.id} className="chip-tarefa chip-conta">
+                💰 {c.titulo}
+                {c.valor != null ? ` · R$ ${Number(c.valor).toFixed(2)}` : ""}
+                {` · vence ${formatarData(c.vencimento)}`}
+              </div>
+            ))}
+            {m.acoesWhatsApp?.map((a, j) => (
+              <a
+                key={j}
+                className="btn-whatsapp"
+                href={a.url}
+                onClick={(e) => {
+                  // No preview/desktop não tem WhatsApp instalado — evita erro de navegação.
+                  if (!/Mobi|iPhone|iPad|Android/i.test(navigator.userAgent)) {
+                    e.preventDefault();
+                    alert("Abrir WhatsApp só funciona no celular, com o app instalado.");
+                  }
+                }}
+              >
+                📲 Abrir WhatsApp ({a.conta}) para {a.contato}
+              </a>
             ))}
           </div>
         ))}
@@ -293,7 +357,29 @@ function isoDe(d) {
   return d.toISOString().slice(0, 10);
 }
 
-function Tarefas({ tarefas, recarregar, setTarefas }) {
+function Agenda({ tarefas, recarregarTarefas, setTarefas, contas, recarregarContas, setContas }) {
+  const [sub, setSub] = useState("tarefas"); // tarefas | contas
+
+  return (
+    <div className="painel-tarefas">
+      <div className="subabas">
+        <button className={sub === "tarefas" ? "sel" : ""} onClick={() => setSub("tarefas")}>
+          ✅ Tarefas
+        </button>
+        <button className={sub === "contas" ? "sel" : ""} onClick={() => setSub("contas")}>
+          💰 Contas a pagar
+        </button>
+      </div>
+      {sub === "tarefas" ? (
+        <ListaTarefas tarefas={tarefas} recarregar={recarregarTarefas} setTarefas={setTarefas} />
+      ) : (
+        <ListaContas contas={contas} recarregar={recarregarContas} setContas={setContas} />
+      )}
+    </div>
+  );
+}
+
+function ListaTarefas({ tarefas, recarregar, setTarefas }) {
   const [filtro, setFiltro] = useState("todas"); // hoje | todas
 
   async function alternar(t) {
@@ -331,7 +417,7 @@ function Tarefas({ tarefas, recarregar, setTarefas }) {
   const visiveis = filtro === "hoje" ? tarefas.filter((t) => t.data === hoje) : tarefas;
 
   return (
-    <div className="painel-tarefas">
+    <div className="sub-painel">
       <div className="filtro">
         <button className={filtro === "hoje" ? "sel" : ""} onClick={() => setFiltro("hoje")}>
           Hoje
@@ -386,11 +472,168 @@ function Tarefas({ tarefas, recarregar, setTarefas }) {
   );
 }
 
+function ListaContas({ contas, recarregar, setContas }) {
+  const [titulo, setTitulo] = useState("");
+  const [valor, setValor] = useState("");
+  const [vencimento, setVencimento] = useState("");
+  const [categoria, setCategoria] = useState("");
+
+  async function adicionar(e) {
+    e.preventDefault();
+    if (!titulo.trim() || !vencimento) return;
+    const nova = await criarConta({
+      titulo: titulo.trim(),
+      valor: valor.trim() || null,
+      vencimento,
+      categoria: categoria.trim() || null,
+    });
+    setContas((lista) => [...lista, nova]);
+    setTitulo("");
+    setValor("");
+    setVencimento("");
+    setCategoria("");
+    recarregar();
+  }
+
+  async function alternarPaga(c) {
+    const novo = c.status === "pago" ? "pendente" : "pago";
+    setContas((lista) => lista.map((x) => (x.id === c.id ? { ...x, status: novo } : x)));
+    try {
+      await atualizarConta(c.id, { status: novo });
+    } finally {
+      recarregar();
+    }
+  }
+
+  async function remover(c) {
+    if (!confirm(`Apagar "${c.titulo}"?`)) return;
+    setContas((lista) => lista.filter((x) => x.id !== c.id));
+    try {
+      await apagarConta(c.id);
+    } finally {
+      recarregar();
+    }
+  }
+
+  const hoje = isoDe(new Date());
+
+  return (
+    <div className="sub-painel">
+      <form className="form-conta" onSubmit={adicionar}>
+        <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Conta de luz, IPTU..." />
+        <div className="linha-conta">
+          <input
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            placeholder="Valor (R$)"
+            inputMode="decimal"
+          />
+          <input value={vencimento} onChange={(e) => setVencimento(e.target.value)} type="date" />
+        </div>
+        <input
+          value={categoria}
+          onChange={(e) => setCategoria(e.target.value)}
+          placeholder="Categoria (opcional): moradia, cartão, imposto..."
+        />
+        <button type="submit" className="btn-principal" disabled={!titulo.trim() || !vencimento}>
+          + Adicionar conta
+        </button>
+      </form>
+
+      {contas.length === 0 ? (
+        <div className="vazio">
+          <p>Nenhuma conta cadastrada.</p>
+          <p className="dica">Peça na aba Conversa: "anota que tenho que pagar o IPTU dia 10".</p>
+        </div>
+      ) : (
+        <div className="lista-tarefas">
+          {contas.map((c) => {
+            const atrasada = c.status !== "pago" && c.vencimento < hoje;
+            return (
+              <div
+                key={c.id}
+                className={"cartao" + (c.status === "pago" ? " feita" : "") + (atrasada ? " atrasada" : "")}
+              >
+                <button className="check" onClick={() => alternarPaga(c)} title="Marcar como paga">
+                  {c.status === "pago" ? "☑" : "☐"}
+                </button>
+                <div className="corpo">
+                  <div className="titulo">{c.titulo}</div>
+                  <div className="meta">
+                    <span>📅 {formatarData(c.vencimento)}</span>
+                    {c.valor != null && <span className="cat">R$ {Number(c.valor).toFixed(2)}</span>}
+                    {c.categoria && <span className="cat">{c.categoria}</span>}
+                    {atrasada && <span className="alta">atrasada</span>}
+                  </div>
+                </div>
+                <div className="acoes">
+                  <button className="apagar" onClick={() => remover(c)} title="Apagar">
+                    🗑
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatarData(iso) {
   if (!iso) return "";
   const [a, m, d] = iso.split("-");
   if (!d) return iso;
   return `${d}/${m}/${a}`;
+}
+
+/* ---------------- Backup ---------------- */
+function PainelBackup({ fechar }) {
+  const [info, setInfo] = useState(null);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    backupInfo()
+      .then(setInfo)
+      .catch(() => setErro("Não consegui verificar o backup agora."));
+  }, []);
+
+  return (
+    <div className="modal-fundo" onClick={fechar}>
+      <div className="modal-backup" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-topo">
+          <strong>💾 Backup dos dados</strong>
+          <button className="fechar" onClick={fechar}>
+            ✕
+          </button>
+        </div>
+
+        <p className="dica">
+          Este arquivo contém todas as suas tarefas, contas, contatos e senhas do Cofre
+          (criptografadas). Não inclui fotos ou vídeos.
+        </p>
+
+        {erro && <p className="erro">{erro}</p>}
+        {info && info.existe && (
+          <p className="info-backup">
+            Tamanho atual: <strong>{info.tamanhoLegivel}</strong>
+            <br />
+            Última alteração: {new Date(info.modificadoEm).toLocaleString("pt-BR")}
+          </p>
+        )}
+        {info && !info.existe && <p className="dica">Ainda não há dados para fazer backup.</p>}
+
+        <a className="btn-principal btn-baixar" href="/api/backup" download>
+          ⬇️ Baixar backup agora
+        </a>
+
+        <p className="dica">
+          Guarde este arquivo no iCloud Drive, Google Drive ou envie por e-mail para você
+          mesmo. Recomendo baixar um novo backup pelo menos uma vez por semana.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 /* ---------------- Cofre (área secreta com PIN) ---------------- */
@@ -606,6 +849,97 @@ function Cofre() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------------- Contatos (para enviar WhatsApp) ---------------- */
+function Contatos() {
+  const [contatos, setContatos] = useState([]);
+  const [nome, setNome] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [conta, setConta] = useState("pessoal");
+  const [carregando, setCarregando] = useState(true);
+
+  useEffect(() => {
+    recarregar();
+  }, []);
+
+  async function recarregar() {
+    try {
+      setContatos(await listarContatos());
+    } catch {
+      /* offline */
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  async function adicionar(e) {
+    e.preventDefault();
+    if (!nome.trim() || !telefone.trim()) return;
+    const novo = await criarContato({ nome: nome.trim(), telefone: telefone.trim(), conta });
+    setContatos((c) => [...c, novo].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")));
+    setNome("");
+    setTelefone("");
+  }
+
+  async function remover(id) {
+    if (!confirm("Apagar este contato?")) return;
+    setContatos((c) => c.filter((x) => x.id !== id));
+    await apagarContato(id).catch(() => {});
+  }
+
+  return (
+    <div className="painel-contatos">
+      <form className="form-contato" onSubmit={adicionar}>
+        <input placeholder="Nome" value={nome} onChange={(e) => setNome(e.target.value)} />
+        <input
+          placeholder="Telefone com DDD (ex.: 71999998888)"
+          inputMode="tel"
+          value={telefone}
+          onChange={(e) => setTelefone(e.target.value)}
+        />
+        <div className="conta-opcoes">
+          <button type="button" className={conta === "pessoal" ? "sel" : ""} onClick={() => setConta("pessoal")}>
+            Pessoal
+          </button>
+          <button
+            type="button"
+            className={conta === "profissional" ? "sel" : ""}
+            onClick={() => setConta("profissional")}
+          >
+            Profissional
+          </button>
+        </div>
+        <button type="submit" className="btn-principal" disabled={!nome.trim() || !telefone.trim()}>
+          + Adicionar contato
+        </button>
+      </form>
+
+      {!carregando && contatos.length === 0 && (
+        <div className="vazio">
+          <p>Nenhum contato salvo ainda.</p>
+          <p className="dica">
+            Depois de salvar, é só pedir na Conversa: <em>"Bella, manda mensagem pro Fernando no profissional"</em>.
+          </p>
+        </div>
+      )}
+
+      <div className="lista-contatos">
+        {contatos.map((c) => (
+          <div key={c.id} className="cartao-contato">
+            <div className="corpo">
+              <div className="titulo">{c.nome}</div>
+              <div className="meta">
+                <span>{c.telefone}</span>
+                <span className={"selo " + c.conta}>{c.conta}</span>
+              </div>
+            </div>
+            <button className="apagar" onClick={() => remover(c.id)} title="Apagar">🗑</button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

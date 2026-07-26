@@ -44,7 +44,8 @@ body {
 }
 .marca strong { display: block; font-size: 18px; line-height: 1.1; }
 .marca small { color: #c9d3e6; font-size: 12px; }
-.audio {
+.topo-acoes { display: flex; align-items: center; gap: 8px; }
+.audio, .backup-btn {
   border: none; background: rgba(255, 255, 255, 0.15); color: #fff;
   width: 40px; height: 40px; border-radius: 12px; font-size: 18px;
 }
@@ -63,6 +64,7 @@ body {
   margin-top: 8px; font-size: 13px; background: #e8ecf5; color: #16264a;
   padding: 6px 10px; border-radius: 10px; display: inline-block;
 }
+.chip-conta { background: #fdeed2; color: #8a5a10; margin-left: 6px; }
 
 /* Modo conversa (mãos livres) */
 .modo-conversa {
@@ -115,8 +117,22 @@ body {
 .dica { font-size: 14px; }
 .dica em { color: var(--teal-d); }
 
-/* Tarefas */
-.painel-tarefas { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+/* Agenda (Tarefas + Contas a pagar) */
+.painel-tarefas { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.subabas { display: flex; gap: 8px; padding: 12px 14px 4px; flex: 0 0 auto; }
+.subabas button {
+  flex: 1; border: 1px solid var(--borda); background: var(--card); color: var(--cinza);
+  padding: 10px; border-radius: 12px; font-size: 14px;
+}
+.subabas button.sel { background: var(--teal); color: #fff; border-color: var(--teal); font-weight: 600; }
+.sub-painel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.form-conta { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 4px; flex: 0 0 auto; }
+.form-conta input {
+  border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; font-size: 16px; background: var(--card);
+}
+.linha-conta { display: flex; gap: 8px; }
+.linha-conta input { flex: 1; min-width: 0; }
+.cartao.atrasada { border-left-color: var(--alta); }
 .filtro { display: flex; gap: 8px; padding: 12px 14px 4px; }
 .filtro button {
   border: 1px solid var(--borda); background: var(--card); color: var(--cinza);
@@ -202,3 +218,49 @@ body {
 }
 .abas button.ativa { color: var(--teal); font-weight: 700; }
 .badge { background: var(--teal); color: #fff; font-size: 12px; border-radius: 10px; padding: 0 7px; }
+
+/* Botão de abrir WhatsApp (dentro da mensagem da Bella) */
+.btn-whatsapp {
+  display: inline-block; margin-top: 8px; background: #1fa855; color: #fff;
+  font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 20px;
+  text-decoration: none;
+}
+
+/* Contatos */
+.painel-contatos { flex: 1; overflow-y: auto; padding: 14px; }
+.form-contato { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.form-contato input {
+  border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; font-size: 16px; background: var(--card);
+}
+.conta-opcoes { display: flex; gap: 8px; }
+.conta-opcoes button {
+  flex: 1; border: 1px solid var(--borda); background: var(--card); color: var(--cinza);
+  padding: 10px; border-radius: 12px; font-size: 14px;
+}
+.conta-opcoes button.sel { background: var(--teal); color: #fff; border-color: var(--teal); font-weight: 600; }
+.lista-contatos { display: flex; flex-direction: column; gap: 10px; }
+.cartao-contato {
+  display: flex; align-items: center; gap: 10px; background: var(--card);
+  border: 1px solid var(--borda); border-radius: 14px; padding: 12px;
+}
+.cartao-contato .meta { display: flex; gap: 8px; align-items: center; margin-top: 2px; font-size: 13px; color: var(--cinza); }
+.selo { padding: 1px 8px; border-radius: 8px; font-size: 12px; }
+.selo.pessoal { background: #e8ecf5; color: var(--teal-d); }
+.selo.profissional { background: #fdeed2; color: #8a5a10; }
+
+/* Backup (modal) */
+.modal-fundo {
+  position: fixed; inset: 0; background: rgba(10, 20, 30, 0.5);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 50;
+}
+.modal-backup {
+  background: var(--card); width: 100%; max-width: 640px; border-radius: 20px 20px 0 0;
+  padding: 18px 18px max(18px, env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 10px;
+}
+.modal-topo { display: flex; align-items: center; justify-content: space-between; color: var(--teal-d); font-size: 16px; }
+.modal-topo .fechar { border: none; background: none; font-size: 18px; color: var(--cinza); padding: 4px; }
+.info-backup { font-size: 14px; color: var(--teal-d); background: #e8ecf5; border-radius: 12px; padding: 10px 14px; }
+.btn-baixar {
+  display: block; text-align: center; text-decoration: none; margin-top: 4px;
+}

@@ -37,6 +37,24 @@ db.exec(`
     categoria TEXT,
     criado_em TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS contatos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    telefone TEXT NOT NULL,     -- com DDD e código do país, ex: 5571999998888
+    conta TEXT NOT NULL,        -- pessoal | profissional
+    criado_em TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS contas_pagar (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    titulo TEXT NOT NULL,
+    valor REAL,                 -- em reais, ex: 189.90 (pode ficar vazio)
+    vencimento TEXT NOT NULL,   -- YYYY-MM-DD
+    categoria TEXT,             -- moradia, cartao, saude, imposto...
+    status TEXT DEFAULT 'pendente',  -- pendente | pago
+    criado_em TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Migração segura: garante a coluna "categoria" em bancos antigos.
@@ -134,6 +152,76 @@ export function atualizarTarefa(id, campos) {
 
 export function apagarTarefa(id) {
   db.prepare("DELETE FROM tarefas WHERE id = ?").run(id);
+}
+
+/* ---------------- Contatos (para enviar WhatsApp) ---------------- */
+export function listarContatos() {
+  return db.prepare("SELECT * FROM contatos ORDER BY nome COLLATE NOCASE").all();
+}
+export function criarContato({ nome, telefone, conta }) {
+  const info = db
+    .prepare("INSERT INTO contatos (nome, telefone, conta) VALUES (?, ?, ?)")
+    .run(nome, String(telefone).replace(/\D/g, ""), conta);
+  return db.prepare("SELECT * FROM contatos WHERE id = ?").get(info.lastInsertRowid);
+}
+export function apagarContato(id) {
+  db.prepare("DELETE FROM contatos WHERE id = ?").run(id);
+}
+
+function semAcento(s) {
+  return String(s || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+// Busca por nome (ignora acentos/maiúsculas) e, se informado, filtra por conta.
+export function buscarContatos(nome, conta) {
+  const alvo = semAcento(nome);
+  return listarContatos().filter((c) => {
+    const bate = semAcento(c.nome).includes(alvo) || alvo.includes(semAcento(c.nome));
+    return bate && (!conta || c.conta === conta);
+  });
+}
+
+/* ---------------- Contas a pagar ---------------- */
+export function listarContas() {
+  return db
+    .prepare(`SELECT * FROM contas_pagar ORDER BY status ASC, vencimento ASC, id DESC`)
+    .all();
+}
+export function criarConta(c) {
+  const info = db
+    .prepare(
+      `INSERT INTO contas_pagar (titulo, valor, vencimento, categoria)
+       VALUES (@titulo, @valor, @vencimento, @categoria)`
+    )
+    .run({
+      titulo: c.titulo,
+      valor: c.valor != null && c.valor !== "" ? Number(c.valor) : null,
+      vencimento: c.vencimento,
+      categoria: c.categoria || null,
+    });
+  return db.prepare("SELECT * FROM contas_pagar WHERE id = ?").get(info.lastInsertRowid);
+}
+export function atualizarConta(id, campos) {
+  const permitidos = ["titulo", "valor", "vencimento", "categoria", "status"];
+  const sets = [];
+  const valores = {};
+  for (const c of permitidos) {
+    if (c in campos) {
+      sets.push(`${c} = @${c}`);
+      valores[c] = campos[c];
+    }
+  }
+  if (sets.length === 0) return db.prepare("SELECT * FROM contas_pagar WHERE id = ?").get(id);
+  valores.id = id;
+  db.prepare(`UPDATE contas_pagar SET ${sets.join(", ")} WHERE id = @id`).run(valores);
+  return db.prepare("SELECT * FROM contas_pagar WHERE id = ?").get(id);
+}
+export function apagarConta(id) {
+  db.prepare("DELETE FROM contas_pagar WHERE id = ?").run(id);
 }
 
 export default db;
