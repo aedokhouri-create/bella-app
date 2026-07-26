@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { APP_NAME } from "./config.js";
+import capaBella from "./assets/bella/capa-oculos.png";
 import {
   listarTarefas,
   atualizarTarefa,
@@ -46,7 +47,7 @@ export default function App() {
     <div className="app">
       <header className="topo">
         <div className="marca">
-          <span className="bolha">⚡</span>
+          <img className="bolha-foto" src={capaBella} alt={APP_NAME} />
           <div>
             <strong>{APP_NAME}</strong>
             <small>seu assistente pessoal</small>
@@ -165,8 +166,16 @@ function Conversa({ ttsOn, aposCriarTarefa }) {
     <div className="conversa">
       <div className="mensagens">
         {mensagens.length === 0 && (
-          <div className="vazio">
-            <p>Olá! Sou a {APP_NAME}. 👋</p>
+          <div className="capa-bella">
+            <img src={capaBella} alt={APP_NAME} />
+            <div className="capa-balao">
+              <strong>Oi, doutor!</strong>
+              <span>Como posso ajudar hoje?</span>
+            </div>
+          </div>
+        )}
+        {mensagens.length === 0 && (
+          <div className="vazio vazio-capa">
             <p className="dica">
               Toque no microfone e fale, ou digite. Ex.:
               <br />

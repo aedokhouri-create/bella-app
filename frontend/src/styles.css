@@ -1,11 +1,11 @@
 :root {
-  --teal: #0e7c86;
-  --teal-d: #0a5a62;
-  --bg: #f2f7f8;
+  --teal: #16264a;
+  --teal-d: #0b1730;
+  --bg: #f4f6fa;
   --card: #ffffff;
   --texto: #1a1a1a;
-  --cinza: #6b7b7d;
-  --borda: #e0e8e9;
+  --cinza: #6b7280;
+  --borda: #e2e5ec;
   --alta: #d64545;
 }
 
@@ -37,13 +37,13 @@ body {
   color: #fff;
 }
 .marca { display: flex; align-items: center; gap: 10px; }
-.marca .bolha {
-  width: 38px; height: 38px; border-radius: 12px;
-  background: rgba(255, 255, 255, 0.18);
-  display: grid; place-items: center; font-size: 20px;
+.marca .bolha-foto {
+  width: 40px; height: 40px; border-radius: 50%;
+  object-fit: cover; object-position: center 15%;
+  border: 2px solid rgba(255, 255, 255, 0.55);
 }
 .marca strong { display: block; font-size: 18px; line-height: 1.1; }
-.marca small { color: #cfe8eb; font-size: 12px; }
+.marca small { color: #c9d3e6; font-size: 12px; }
 .audio {
   border: none; background: rgba(255, 255, 255, 0.15); color: #fff;
   width: 40px; height: 40px; border-radius: 12px; font-size: 18px;
@@ -60,7 +60,7 @@ body {
 .balao.user { align-self: flex-end; background: var(--teal); color: #fff; border-bottom-right-radius: 4px; }
 .balao.assistant { align-self: flex-start; background: var(--card); border: 1px solid var(--borda); border-bottom-left-radius: 4px; }
 .chip-tarefa {
-  margin-top: 8px; font-size: 13px; background: #e6f4f1; color: #0a5a62;
+  margin-top: 8px; font-size: 13px; background: #e8ecf5; color: #16264a;
   padding: 6px 10px; border-radius: 10px; display: inline-block;
 }
 
@@ -77,15 +77,31 @@ body {
 .mic, .enviar {
   width: 46px; height: 46px; border-radius: 50%; border: none; font-size: 18px; flex: 0 0 auto;
 }
-.mic { background: #eef5f6; }
+.mic { background: #e8ecf5; }
 .mic.gravando { background: var(--alta); color: #fff; animation: pulsa 1s infinite; }
 @keyframes pulsa { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
 .enviar { background: var(--teal); color: #fff; }
 .enviar:disabled { opacity: 0.4; }
 
+/* Capa da Bella (tela de boas-vindas) */
+.capa-bella {
+  position: relative; margin: 16px 16px 0; border-radius: 20px; overflow: hidden;
+  box-shadow: 0 8px 24px rgba(10, 60, 65, 0.18);
+}
+.capa-bella img { display: block; width: 100%; height: 280px; object-fit: cover; object-position: center 12%; }
+.capa-balao {
+  position: absolute; left: 14px; bottom: 14px; right: 14px;
+  background: rgba(20, 24, 24, 0.68); backdrop-filter: blur(3px);
+  color: #fff; border-radius: 14px; padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.capa-balao strong { font-size: 16px; }
+.capa-balao span { font-size: 14px; color: #e7ecec; opacity: 0.9; }
+
 /* Vazio / dicas */
 .vazio { margin: auto; text-align: center; color: var(--cinza); padding: 24px; }
 .vazio p { margin: 6px 0; }
+.vazio-capa { margin-top: 0; padding-top: 18px; }
 .dica { font-size: 14px; }
 .dica em { color: var(--teal-d); }
 
@@ -115,7 +131,7 @@ body {
 .corpo { flex: 1; min-width: 0; }
 .titulo { font-size: 16px; font-weight: 600; }
 .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; font-size: 13px; color: var(--cinza); }
-.meta .cat { background: #eef5f6; color: var(--teal-d); padding: 1px 8px; border-radius: 8px; }
+.meta .cat { background: #e8ecf5; color: var(--teal-d); padding: 1px 8px; border-radius: 8px; }
 .meta .alta { background: #fce8e8; color: var(--alta); padding: 1px 8px; border-radius: 8px; }
 .desc { margin-top: 4px; font-size: 14px; color: var(--cinza); }
 
@@ -157,7 +173,7 @@ body {
   padding: 6px 2px; display: flex; align-items: center; gap: 8px;
 }
 .grupo-titulo .conta {
-  background: #e6f4f1; color: var(--teal-d); font-size: 12px; border-radius: 10px; padding: 0 8px; font-weight: 600;
+  background: #e8ecf5; color: var(--teal-d); font-size: 12px; border-radius: 10px; padding: 0 8px; font-weight: 600;
 }
 .nota { display: flex; align-items: flex-start; gap: 10px; background: var(--card); border: 1px solid var(--borda); border-radius: 14px; padding: 12px; margin-bottom: 8px; }
 .nota-corpo { flex: 1; min-width: 0; }
