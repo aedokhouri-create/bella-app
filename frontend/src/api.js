@@ -28,3 +28,33 @@ export const enviarMensagem = (message, history) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, history }),
   }).then(json);
+
+/* ---------------- Cofre (área secreta) ---------------- */
+export const cofreStatus = () => fetch("/api/cofre/status").then(json);
+
+export const cofreDefinir = (pin, pinAtual) =>
+  fetch("/api/cofre/definir", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pin, pinAtual }),
+  }).then(json);
+
+export const cofreVerificar = (pin) =>
+  fetch("/api/cofre/verificar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pin }),
+  }).then(json);
+
+export const cofreListarNotas = (pin) =>
+  fetch("/api/cofre/notas", { headers: { "x-cofre-pin": pin } }).then(json);
+
+export const cofreCriarNota = (pin, nota) =>
+  fetch("/api/cofre/notas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-cofre-pin": pin },
+    body: JSON.stringify(nota),
+  }).then(json);
+
+export const cofreApagarNota = (pin, id) =>
+  fetch(`/api/cofre/notas/${id}`, { method: "DELETE", headers: { "x-cofre-pin": pin } }).then(json);

@@ -5,6 +5,12 @@ import {
   atualizarTarefa,
   apagarTarefa,
   enviarMensagem,
+  cofreStatus,
+  cofreDefinir,
+  cofreVerificar,
+  cofreListarNotas,
+  cofreCriarNota,
+  cofreApagarNota,
 } from "./api.js";
 
 const hojeChave = () => "nina_chat_" + new Date().toISOString().slice(0, 10);
@@ -48,11 +54,13 @@ export default function App() {
       </header>
 
       <main className="conteudo">
-        {aba === "conversa" ? (
+        {aba === "conversa" && (
           <Conversa ttsOn={ttsOn} aposCriarTarefa={recarregarTarefas} />
-        ) : (
+        )}
+        {aba === "tarefas" && (
           <Tarefas tarefas={tarefas} recarregar={recarregarTarefas} setTarefas={setTarefas} />
         )}
+        {aba === "cofre" && <Cofre />}
       </main>
 
       <nav className="abas">
@@ -61,6 +69,9 @@ export default function App() {
         </button>
         <button className={aba === "tarefas" ? "ativa" : ""} onClick={() => setAba("tarefas")}>
           ✅ Tarefas {pendentes > 0 && <span className="badge">{pendentes}</span>}
+        </button>
+        <button className={aba === "cofre" ? "ativa" : ""} onClick={() => setAba("cofre")}>
+          🔒 Cofre
         </button>
       </nav>
     </div>
@@ -298,4 +309,166 @@ function formatarData(iso) {
   const [a, m, d] = iso.split("-");
   if (!d) return iso;
   return `${d}/${m}/${a}`;
+}
+
+/* ---------------- Cofre (área secreta com PIN) ---------------- */
+function Cofre() {
+  const [modo, setModo] = useState("carregando"); // carregando | setup | bloqueado | aberto
+  const [pin, setPin] = useState("");
+  const [entrada, setEntrada] = useState("");
+  const [confirma, setConfirma] = useState("");
+  const [erro, setErro] = useState("");
+  const [notas, setNotas] = useState([]);
+  const [novoTitulo, setNovoTitulo] = useState("");
+  const [novoConteudo, setNovoConteudo] = useState("");
+
+  useEffect(() => {
+    cofreStatus()
+      .then((s) => setModo(s.configurado ? "bloqueado" : "setup"))
+      .catch(() => setModo("bloqueado"));
+  }, []);
+
+  async function abrirCom(p) {
+    const lista = await cofreListarNotas(p);
+    setNotas(lista);
+    setPin(p);
+    setModo("aberto");
+    setEntrada("");
+    setConfirma("");
+    setErro("");
+  }
+
+  async function criarPin(e) {
+    e.preventDefault();
+    setErro("");
+    if (entrada.length < 4) return setErro("O PIN precisa ter pelo menos 4 dígitos.");
+    if (entrada !== confirma) return setErro("Os PINs não são iguais.");
+    try {
+      await cofreDefinir(entrada);
+      await abrirCom(entrada);
+    } catch {
+      setErro("Não consegui criar o PIN.");
+    }
+  }
+
+  async function desbloquear(e) {
+    e.preventDefault();
+    setErro("");
+    try {
+      const r = await cofreVerificar(entrada);
+      if (r.ok) await abrirCom(entrada);
+      else setErro("PIN incorreto.");
+    } catch {
+      setErro("Erro ao verificar o PIN.");
+    }
+  }
+
+  function trancar() {
+    setPin("");
+    setNotas([]);
+    setEntrada("");
+    setModo("bloqueado");
+  }
+
+  async function adicionarNota(e) {
+    e.preventDefault();
+    if (!novoTitulo.trim()) return;
+    const nota = await cofreCriarNota(pin, { titulo: novoTitulo.trim(), conteudo: novoConteudo.trim() });
+    setNotas((n) => [nota, ...n]);
+    setNovoTitulo("");
+    setNovoConteudo("");
+  }
+
+  async function removerNota(id) {
+    if (!confirm("Apagar esta nota?")) return;
+    setNotas((n) => n.filter((x) => x.id !== id));
+    await cofreApagarNota(pin, id).catch(() => {});
+  }
+
+  if (modo === "carregando") return <div className="vazio"><p>…</p></div>;
+
+  if (modo === "setup" || modo === "bloqueado") {
+    const criar = modo === "setup";
+    return (
+      <div className="cofre-lock">
+        <div className="cadeado">🔒</div>
+        <h2>{criar ? "Criar seu cofre" : "Cofre pessoal"}</h2>
+        <p className="dica">
+          {criar
+            ? "Crie um PIN para proteger suas anotações privadas."
+            : "Digite seu PIN para abrir."}
+        </p>
+        <form onSubmit={criar ? criarPin : desbloquear} className="form-pin">
+          <input
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="PIN (mín. 4 dígitos)"
+            value={entrada}
+            onChange={(e) => setEntrada(e.target.value.replace(/\D/g, ""))}
+          />
+          {criar && (
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="Confirmar PIN"
+              value={confirma}
+              onChange={(e) => setConfirma(e.target.value.replace(/\D/g, ""))}
+            />
+          )}
+          {erro && <div className="erro">{erro}</div>}
+          <button type="submit" className="btn-principal">
+            {criar ? "Criar cofre" : "Abrir"}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  // aberto
+  return (
+    <div className="cofre-aberto">
+      <div className="cofre-topo">
+        <span>🔓 Cofre aberto</span>
+        <button className="trancar" onClick={trancar}>
+          Trancar
+        </button>
+      </div>
+      <form className="form-nota" onSubmit={adicionarNota}>
+        <input
+          placeholder="Título (ex.: Senha do banco)"
+          value={novoTitulo}
+          onChange={(e) => setNovoTitulo(e.target.value)}
+        />
+        <textarea
+          placeholder="Conteúdo (opcional)"
+          value={novoConteudo}
+          onChange={(e) => setNovoConteudo(e.target.value)}
+          rows={2}
+        />
+        <button type="submit" className="btn-principal" disabled={!novoTitulo.trim()}>
+          + Guardar nota
+        </button>
+      </form>
+
+      {notas.length === 0 ? (
+        <div className="vazio"><p className="dica">Nenhuma nota guardada ainda.</p></div>
+      ) : (
+        <div className="notas">
+          {notas.map((n) => (
+            <div key={n.id} className="nota">
+              <div className="nota-corpo">
+                <div className="titulo">{n.titulo}</div>
+                {n.conteudo && <div className="desc">{n.conteudo}</div>}
+              </div>
+              <button className="apagar" onClick={() => removerNota(n.id)} title="Apagar">
+                🗑
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

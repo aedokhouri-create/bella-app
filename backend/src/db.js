@@ -24,7 +24,44 @@ db.exec(`
     status TEXT DEFAULT 'pendente',    -- pendente | concluida
     criado_em TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS config (
+    chave TEXT PRIMARY KEY,
+    valor TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS notas_secretas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    titulo TEXT NOT NULL,
+    conteudo TEXT,
+    criado_em TEXT DEFAULT (datetime('now'))
+  );
 `);
+
+/* ---------------- Config (chave/valor) ---------------- */
+export function getConfig(chave) {
+  const row = db.prepare("SELECT valor FROM config WHERE chave = ?").get(chave);
+  return row ? row.valor : null;
+}
+export function setConfig(chave, valor) {
+  db.prepare(
+    "INSERT INTO config (chave, valor) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor"
+  ).run(chave, valor);
+}
+
+/* ---------------- Notas do cofre ---------------- */
+export function listarNotas() {
+  return db.prepare("SELECT * FROM notas_secretas ORDER BY id DESC").all();
+}
+export function criarNota({ titulo, conteudo }) {
+  const info = db
+    .prepare("INSERT INTO notas_secretas (titulo, conteudo) VALUES (?, ?)")
+    .run(titulo, conteudo || null);
+  return db.prepare("SELECT * FROM notas_secretas WHERE id = ?").get(info.lastInsertRowid);
+}
+export function apagarNota(id) {
+  db.prepare("DELETE FROM notas_secretas WHERE id = ?").run(id);
+}
 
 export function listarTarefas() {
   return db
