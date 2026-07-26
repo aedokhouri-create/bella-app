@@ -34,9 +34,16 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     titulo TEXT NOT NULL,
     conteudo TEXT,
+    categoria TEXT,
     criado_em TEXT DEFAULT (datetime('now'))
   );
 `);
+
+// Migração segura: garante a coluna "categoria" em bancos antigos.
+{
+  const cols = db.prepare("PRAGMA table_info(notas_secretas)").all().map((c) => c.name);
+  if (!cols.includes("categoria")) db.exec("ALTER TABLE notas_secretas ADD COLUMN categoria TEXT");
+}
 
 /* ---------------- Config (chave/valor) ---------------- */
 export function getConfig(chave) {
@@ -51,12 +58,16 @@ export function setConfig(chave, valor) {
 
 /* ---------------- Notas do cofre ---------------- */
 export function listarNotas() {
-  return db.prepare("SELECT * FROM notas_secretas ORDER BY id DESC").all();
+  return db
+    .prepare(
+      "SELECT * FROM notas_secretas ORDER BY (categoria IS NULL), categoria COLLATE NOCASE, titulo COLLATE NOCASE"
+    )
+    .all();
 }
-export function criarNota({ titulo, conteudo }) {
+export function criarNota({ titulo, conteudo, categoria }) {
   const info = db
-    .prepare("INSERT INTO notas_secretas (titulo, conteudo) VALUES (?, ?)")
-    .run(titulo, conteudo || null);
+    .prepare("INSERT INTO notas_secretas (titulo, conteudo, categoria) VALUES (?, ?, ?)")
+    .run(titulo, conteudo || null, categoria || null);
   return db.prepare("SELECT * FROM notas_secretas WHERE id = ?").get(info.lastInsertRowid);
 }
 export function apagarNota(id) {

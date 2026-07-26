@@ -15,6 +15,14 @@ import {
 
 const hojeChave = () => "nina_chat_" + new Date().toISOString().slice(0, 10);
 
+const CATEGORIAS_COFRE = [
+  "🏥 Hospitais & Sistemas Médicos",
+  "🏛️ Governo & Conselhos",
+  "💰 Financeiro & Bancos",
+  "📱 Apps & Tecnologia",
+  "🔒 Acessos Físicos",
+];
+
 export default function App() {
   const [aba, setAba] = useState("conversa"); // conversa | tarefas
   const [tarefas, setTarefas] = useState([]);
@@ -321,6 +329,8 @@ function Cofre() {
   const [notas, setNotas] = useState([]);
   const [novoTitulo, setNovoTitulo] = useState("");
   const [novoConteudo, setNovoConteudo] = useState("");
+  const [novaCategoria, setNovaCategoria] = useState("");
+  const [busca, setBusca] = useState("");
 
   useEffect(() => {
     cofreStatus()
@@ -373,10 +383,15 @@ function Cofre() {
   async function adicionarNota(e) {
     e.preventDefault();
     if (!novoTitulo.trim()) return;
-    const nota = await cofreCriarNota(pin, { titulo: novoTitulo.trim(), conteudo: novoConteudo.trim() });
+    const nota = await cofreCriarNota(pin, {
+      titulo: novoTitulo.trim(),
+      conteudo: novoConteudo.trim(),
+      categoria: novaCategoria || null,
+    });
     setNotas((n) => [nota, ...n]);
     setNovoTitulo("");
     setNovoConteudo("");
+    setNovaCategoria("");
   }
 
   async function removerNota(id) {
@@ -426,7 +441,32 @@ function Cofre() {
     );
   }
 
-  // aberto
+  function copiar(n) {
+    const txt = [n.titulo, n.conteudo].filter(Boolean).join("\n");
+    navigator.clipboard?.writeText(txt);
+  }
+
+  // aberto — agrupa por categoria (com busca)
+  const filtradas = notas.filter((n) => {
+    if (!busca.trim()) return true;
+    const q = busca.toLowerCase();
+    return (
+      (n.titulo || "").toLowerCase().includes(q) ||
+      (n.categoria || "").toLowerCase().includes(q) ||
+      (n.conteudo || "").toLowerCase().includes(q)
+    );
+  });
+  const grupos = {};
+  for (const n of filtradas) {
+    const c = n.categoria || "Outros";
+    (grupos[c] ||= []).push(n);
+  }
+  const ordem = [...CATEGORIAS_COFRE, "Outros"];
+  const chaves = Object.keys(grupos).sort((a, b) => {
+    const ia = ordem.indexOf(a), ib = ordem.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+
   return (
     <div className="cofre-aberto">
       <div className="cofre-topo">
@@ -437,34 +477,57 @@ function Cofre() {
       </div>
       <form className="form-nota" onSubmit={adicionarNota}>
         <input
-          placeholder="Título (ex.: Senha do banco)"
+          placeholder="Título (ex.: Banco do Brasil)"
           value={novoTitulo}
           onChange={(e) => setNovoTitulo(e.target.value)}
         />
         <textarea
-          placeholder="Conteúdo (opcional)"
+          placeholder="Login / senha / detalhes"
           value={novoConteudo}
           onChange={(e) => setNovoConteudo(e.target.value)}
           rows={2}
         />
+        <select value={novaCategoria} onChange={(e) => setNovaCategoria(e.target.value)}>
+          <option value="">Sem categoria</option>
+          {CATEGORIAS_COFRE.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
         <button type="submit" className="btn-principal" disabled={!novoTitulo.trim()}>
-          + Guardar nota
+          + Guardar
         </button>
       </form>
+
+      {notas.length > 0 && (
+        <input
+          className="busca-cofre"
+          placeholder="🔎 Buscar (ex.: banco, hospital, gov)"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+        />
+      )}
 
       {notas.length === 0 ? (
         <div className="vazio"><p className="dica">Nenhuma nota guardada ainda.</p></div>
       ) : (
         <div className="notas">
-          {notas.map((n) => (
-            <div key={n.id} className="nota">
-              <div className="nota-corpo">
-                <div className="titulo">{n.titulo}</div>
-                {n.conteudo && <div className="desc">{n.conteudo}</div>}
+          {chaves.map((cat) => (
+            <div key={cat} className="grupo">
+              <div className="grupo-titulo">
+                {cat} <span className="conta">{grupos[cat].length}</span>
               </div>
-              <button className="apagar" onClick={() => removerNota(n.id)} title="Apagar">
-                🗑
-              </button>
+              {grupos[cat].map((n) => (
+                <div key={n.id} className="nota">
+                  <div className="nota-corpo">
+                    <div className="titulo">{n.titulo}</div>
+                    {n.conteudo && <div className="desc">{n.conteudo}</div>}
+                  </div>
+                  <div className="nota-acoes">
+                    <button className="copiar" onClick={() => copiar(n)} title="Copiar">📋</button>
+                    <button className="apagar" onClick={() => removerNota(n.id)} title="Apagar">🗑</button>
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
         </div>
