@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["pwa-192x192.png", "pwa-512x512.png"],
       manifest: {
-        name: "Nina — Assistente Pessoal",
-        short_name: "Nina",
+        name: "Bella — Assistente Pessoal",
+        short_name: "Bella",
         description: "Seu assistente pessoal por voz e texto.",
         lang: "pt-BR",
         start_url: "/",

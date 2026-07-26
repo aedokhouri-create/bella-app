@@ -1,9 +1,9 @@
-# Nina — Assistente Pessoal (PWA)
+# Bella — Assistente Pessoal (PWA)
 
 Assistente pessoal por **voz e texto** que entende linguagem natural e cria suas
 tarefas automaticamente. Feito para instalar na tela inicial do iPhone/iPad (PWA).
 
-> O nome "Nina" é provisório — para trocar, edite `frontend/src/config.js`.
+> O nome "Bella" é provisório — para trocar, edite `frontend/src/config.js`.
 
 ## O que já funciona (MVP)
 

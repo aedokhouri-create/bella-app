@@ -1,4 +1,4 @@
-# Onde paramos — Nina (Assistente Pessoal)
+# Onde paramos — Bella (Assistente Pessoal)
 
 _Atualizado na noite de 25/07/2026._
 
@@ -40,7 +40,7 @@ Abra o endereço do frontend (ex.: http://localhost:5173) no navegador.
 - **Gastos pessoais** (quanto gastou no mês, por categoria).
 - Notificações push (lembrete chega no celular na hora).
 - Publicar no Railway com login só seu (HTTPS + instalar no iPhone de verdade).
-- Escolher o nome definitivo (hoje está "Nina" — muda em `frontend/src/config.js`).
+- Escolher o nome definitivo (hoje está "Bella" — muda em `frontend/src/config.js`).
 
 ## 💡 Ideias novas (anotadas na noite de 25/07) — todas viáveis
 
@@ -48,7 +48,7 @@ Abra o endereço do frontend (ex.: http://localhost:5173) no navegador.
   Face ID** (biometria do próprio iPhone), para guardar notas e coisas pessoais.
   → Fácil e seguro. Ótimo primeiro recurso pra fazer.
 
-- **Enviar mensagem no WhatsApp por voz:** você dita, a Nina transcreve e **abre o
+- **Enviar mensagem no WhatsApp por voz:** você dita, a Bella transcreve e **abre o
   WhatsApp já com a mensagem escrita para o contato** — você só confere e toca em
   enviar. (Enviar 100% sozinho, sem tocar, exigiria a API paga do WhatsApp Business;
   a versão prática e gratuita é essa: deixa tudo pronto.)
