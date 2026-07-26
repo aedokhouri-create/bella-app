@@ -42,4 +42,28 @@ Abra o endereço do frontend (ex.: http://localhost:5173) no navegador.
 - Publicar no Railway com login só seu (HTTPS + instalar no iPhone de verdade).
 - Escolher o nome definitivo (hoje está "Nina" — muda em `frontend/src/config.js`).
 
+## 💡 Ideias novas (anotadas na noite de 25/07) — todas viáveis
+
+- **Pasta/área secreta:** uma seção privada dentro do app, protegida por **PIN ou
+  Face ID** (biometria do próprio iPhone), para guardar notas e coisas pessoais.
+  → Fácil e seguro. Ótimo primeiro recurso pra fazer.
+
+- **Enviar mensagem no WhatsApp por voz:** você dita, a Nina transcreve e **abre o
+  WhatsApp já com a mensagem escrita para o contato** — você só confere e toca em
+  enviar. (Enviar 100% sozinho, sem tocar, exigiria a API paga do WhatsApp Business;
+  a versão prática e gratuita é essa: deixa tudo pronto.)
+
+- **Enviar e-mail por voz/texto:** duas formas —
+  (a) **abre o app de e-mail já preenchido** (você toca em enviar); ou
+  (b) **envia direto pelo servidor** (automático, igual ao backup por e-mail que já
+  fazemos no CMOT com o Gmail). A opção (b) manda sozinho.
+
+- Outras tarefas de assistente (à medida que forem surgindo — é só ir me dizendo).
+
+## Sugestão de ordem pra amanhã
+1. Colocar sua chave da API e testar o fluxo de voz → tarefa (o principal).
+2. **Área secreta com PIN/Face ID** (rápida e útil).
+3. **Mensagem por voz → WhatsApp** (prática, gratuita).
+4. E-mail por voz.
+
 Bom descanso! Amanhã é só me chamar que continuamos daqui. 💙
