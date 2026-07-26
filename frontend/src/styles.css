@@ -64,6 +64,16 @@ body {
   padding: 6px 10px; border-radius: 10px; display: inline-block;
 }
 
+/* Modo conversa (mãos livres) */
+.modo-conversa {
+  margin: 0 12px 8px; border: 1px solid var(--borda); background: var(--card);
+  color: var(--cinza); border-radius: 14px; padding: 10px 14px; font-size: 13px;
+  text-align: center;
+}
+.modo-conversa.on {
+  background: var(--teal); color: #fff; border-color: var(--teal); font-weight: 600;
+}
+
 /* Barra de digitação */
 .barra {
   display: flex; align-items: center; gap: 8px; padding: 10px 12px;

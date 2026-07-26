@@ -16,6 +16,21 @@ import {
 
 const hojeChave = () => "nina_chat_" + new Date().toISOString().slice(0, 10);
 
+// Escolhe a melhor voz em português disponível no navegador (varia por
+// aparelho/navegador — o iOS Safari costuma ter "Luciana" como a mais natural).
+function escolherVoz() {
+  const vozes = window.speechSynthesis?.getVoices() || [];
+  if (!vozes.length) return null;
+  const brasileiras = vozes.filter((v) => v.lang?.toLowerCase().startsWith("pt-br"));
+  const preferidas = ["luciana", "google português do brasil", "fernanda", "camila"];
+  for (const nome of preferidas) {
+    const achada = brasileiras.find((v) => v.name.toLowerCase().includes(nome));
+    if (achada) return achada;
+  }
+  if (brasileiras.length) return brasileiras[0];
+  return vozes.find((v) => v.lang?.toLowerCase().startsWith("pt")) || null;
+}
+
 const CATEGORIAS_COFRE = [
   "🏥 Hospitais & Sistemas Médicos",
   "🏛️ Governo & Conselhos",
@@ -99,18 +114,45 @@ function Conversa({ ttsOn, aposCriarTarefa }) {
   const [texto, setTexto] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [ouvindo, setOuvindo] = useState(false);
+  const [modoConversa, setModoConversa] = useState(false);
   const fimRef = useRef(null);
   const recogRef = useRef(null);
+  const vozRef = useRef(null);
+  const modoConversaRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(hojeChave(), JSON.stringify(mensagens));
     fimRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensagens]);
 
-  function falar(txt) {
-    if (!ttsOn || !("speechSynthesis" in window)) return;
+  // As vozes do navegador carregam de forma assíncrona (principalmente no
+  // Safari/iOS) — escutamos o evento certo para pegar a melhor assim que estiver pronta.
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+    function atualizarVoz() {
+      vozRef.current = escolherVoz();
+    }
+    atualizarVoz();
+    window.speechSynthesis.addEventListener("voiceschanged", atualizarVoz);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", atualizarVoz);
+  }, []);
+
+  useEffect(() => {
+    modoConversaRef.current = modoConversa;
+  }, [modoConversa]);
+
+  function falar(txt, aoTerminar) {
+    if (!ttsOn || !("speechSynthesis" in window)) {
+      aoTerminar?.();
+      return;
+    }
     const u = new SpeechSynthesisUtterance(txt);
     u.lang = "pt-BR";
+    u.rate = 1.0;
+    u.pitch = 1.05;
+    if (vozRef.current) u.voice = vozRef.current;
+    u.onend = () => aoTerminar?.();
+    u.onerror = () => aoTerminar?.();
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   }
@@ -125,7 +167,10 @@ function Conversa({ ttsOn, aposCriarTarefa }) {
     try {
       const { reply, tarefas } = await enviarMensagem(msg, historico);
       setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas }]);
-      falar(reply);
+      falar(reply, () => {
+        // Modo conversa: assim que ela termina de falar, volta a escutar sozinha.
+        if (modoConversaRef.current) iniciarEscuta();
+      });
       if (tarefas && tarefas.length) aposCriarTarefa();
     } catch {
       setMensagens((m) => [
@@ -137,14 +182,10 @@ function Conversa({ ttsOn, aposCriarTarefa }) {
     }
   }
 
-  function toggleMic() {
+  function iniciarEscuta() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       alert("Seu navegador não suporta ditado por voz. Use o Safari (iPhone) ou Chrome.");
-      return;
-    }
-    if (ouvindo) {
-      recogRef.current?.stop();
       return;
     }
     const r = new SR();
@@ -160,6 +201,22 @@ function Conversa({ ttsOn, aposCriarTarefa }) {
     };
     recogRef.current = r;
     r.start();
+  }
+
+  function toggleMic() {
+    if (ouvindo) {
+      recogRef.current?.stop();
+      return;
+    }
+    iniciarEscuta();
+  }
+
+  function alternarModoConversa() {
+    setModoConversa((v) => {
+      const novo = !v;
+      if (novo && !ouvindo && !ocupado) iniciarEscuta();
+      return novo;
+    });
   }
 
   return (
@@ -198,6 +255,14 @@ function Conversa({ ttsOn, aposCriarTarefa }) {
         {ocupado && <div className="balao assistant"><div className="txt">…</div></div>}
         <div ref={fimRef} />
       </div>
+
+      <button
+        type="button"
+        className={"modo-conversa " + (modoConversa ? "on" : "")}
+        onClick={alternarModoConversa}
+      >
+        {modoConversa ? "🎙️ Modo conversa ativado — toque para desligar" : "🎙️ Ativar modo conversa (mãos livres)"}
+      </button>
 
       <form
         className="barra"
