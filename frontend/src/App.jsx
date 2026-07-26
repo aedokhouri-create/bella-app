@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { APP_NAME } from "./config.js";
 import capaBella from "./assets/bella/capa-oculos.png";
 import {
@@ -24,11 +24,19 @@ import {
 
 const hojeChave = () => "nina_chat_" + new Date().toISOString().slice(0, 10);
 
+const CHAVE_VOZ_ESCOLHIDA = "bella_voz_escolhida";
+
 // Escolhe a melhor voz em português disponível no navegador (varia por
 // aparelho/navegador — o iOS Safari costuma ter "Luciana" como a mais natural).
+// Se o usuário já escolheu uma voz nas configurações, usa essa em vez de adivinhar.
 function escolherVoz() {
   const vozes = window.speechSynthesis?.getVoices() || [];
   if (!vozes.length) return null;
+  const preferidaSalva = localStorage.getItem(CHAVE_VOZ_ESCOLHIDA);
+  if (preferidaSalva) {
+    const escolhida = vozes.find((v) => v.name === preferidaSalva);
+    if (escolhida) return escolhida;
+  }
   const brasileiras = vozes.filter((v) => v.lang?.toLowerCase().startsWith("pt-br"));
   const preferidas = ["luciana", "google português do brasil", "fernanda", "camila"];
   for (const nome of preferidas) {
@@ -84,6 +92,7 @@ export default function App() {
   const [contas, setContas] = useState([]);
   const [ttsOn, setTtsOn] = useState(true);
   const [backupAberto, setBackupAberto] = useState(false);
+  const [vozAberto, setVozAberto] = useState(false);
 
   useEffect(() => {
     recarregarTarefas();
@@ -120,6 +129,9 @@ export default function App() {
           </div>
         </div>
         <div className="topo-acoes">
+          <button className="backup-btn" onClick={() => setVozAberto(true)} title="Escolher a voz da Bella">
+            🗣️
+          </button>
           <button className="backup-btn" onClick={() => setBackupAberto(true)} title="Backup dos dados">
             💾
           </button>
@@ -152,6 +164,7 @@ export default function App() {
       </main>
 
       {backupAberto && <PainelBackup fechar={() => setBackupAberto(false)} />}
+      {vozAberto && <PainelVoz fechar={() => setVozAberto(false)} />}
 
       <nav className="abas">
         <button className={aba === "conversa" ? "ativa" : ""} onClick={() => setAba("conversa")}>
@@ -441,14 +454,19 @@ function Agenda({ tarefas, recarregarTarefas, setTarefas, contas, recarregarCont
           ✅ Tarefas
         </button>
         <button className={sub === "contas" ? "sel" : ""} onClick={() => setSub("contas")}>
-          💰 Contas a pagar
+          💰 Contas
+        </button>
+        <button className={sub === "calendario" ? "sel" : ""} onClick={() => setSub("calendario")}>
+          📆 Calendário
         </button>
       </div>
-      {sub === "tarefas" ? (
+      {sub === "tarefas" && (
         <ListaTarefas tarefas={tarefas} recarregar={recarregarTarefas} setTarefas={setTarefas} />
-      ) : (
+      )}
+      {sub === "contas" && (
         <ListaContas contas={contas} recarregar={recarregarContas} setContas={setContas} />
       )}
+      {sub === "calendario" && <Calendario tarefas={tarefas} contas={contas} />}
     </div>
   );
 }
@@ -654,6 +672,102 @@ function ListaContas({ contas, recarregar, setContas }) {
   );
 }
 
+const DIAS_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"];
+
+function Calendario({ tarefas, contas }) {
+  const [mesAtual, setMesAtual] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [diaSelecionado, setDiaSelecionado] = useState(() => isoDe(new Date()));
+
+  const itensPorDia = useMemo(() => {
+    const mapa = {};
+    for (const t of tarefas) {
+      if (!t.data) continue;
+      if (!mapa[t.data]) mapa[t.data] = { tarefas: [], contas: [] };
+      mapa[t.data].tarefas.push(t);
+    }
+    for (const c of contas) {
+      if (!mapa[c.vencimento]) mapa[c.vencimento] = { tarefas: [], contas: [] };
+      mapa[c.vencimento].contas.push(c);
+    }
+    return mapa;
+  }, [tarefas, contas]);
+
+  const ano = mesAtual.getFullYear();
+  const mes = mesAtual.getMonth();
+  const primeiroDiaSemana = new Date(ano, mes, 1).getDay();
+  const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+
+  const celulas = [];
+  for (let i = 0; i < primeiroDiaSemana; i++) celulas.push(null);
+  for (let d = 1; d <= diasNoMes; d++) celulas.push(d);
+
+  function isoDoDia(d) {
+    return `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  const hoje = isoDe(new Date());
+  const itensDia = itensPorDia[diaSelecionado] || { tarefas: [], contas: [] };
+  const nomeMes = mesAtual.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+
+  return (
+    <div className="calendario">
+      <div className="cal-nav">
+        <button onClick={() => setMesAtual(new Date(ano, mes - 1, 1))}>‹</button>
+        <strong>{nomeMes}</strong>
+        <button onClick={() => setMesAtual(new Date(ano, mes + 1, 1))}>›</button>
+      </div>
+      <div className="cal-semana">
+        {DIAS_SEMANA.map((d, i) => (
+          <span key={i}>{d}</span>
+        ))}
+      </div>
+      <div className="cal-grade">
+        {celulas.map((d, i) => {
+          if (d == null) return <div key={i} className="cal-dia vazia" />;
+          const iso = isoDoDia(d);
+          const item = itensPorDia[iso];
+          const temItem = item && (item.tarefas.length > 0 || item.contas.length > 0);
+          return (
+            <button
+              key={i}
+              className={"cal-dia" + (iso === diaSelecionado ? " sel" : "") + (iso === hoje ? " hoje" : "")}
+              onClick={() => setDiaSelecionado(iso)}
+            >
+              {d}
+              {temItem && <span className="cal-ponto" />}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="cal-lista">
+        <div className="cal-lista-titulo">{formatarData(diaSelecionado)}</div>
+        {itensDia.tarefas.length === 0 && itensDia.contas.length === 0 ? (
+          <p className="dica">Nada para este dia.</p>
+        ) : (
+          <>
+            {itensDia.tarefas.map((t) => (
+              <div key={"t" + t.id} className="cal-item">
+                ✅ {t.titulo}
+                {t.hora ? ` · ${t.hora}` : ""}
+              </div>
+            ))}
+            {itensDia.contas.map((c) => (
+              <div key={"c" + c.id} className="cal-item conta">
+                💰 {c.titulo}
+                {c.valor != null ? ` · R$ ${Number(c.valor).toFixed(2)}` : ""}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function formatarData(iso) {
   if (!iso) return "";
   const [a, m, d] = iso.split("-");
@@ -705,6 +819,74 @@ function PainelBackup({ fechar }) {
           Guarde este arquivo no iCloud Drive, Google Drive ou envie por e-mail para você
           mesmo. Recomendo baixar um novo backup pelo menos uma vez por semana.
         </p>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Voz da Bella ---------------- */
+function PainelVoz({ fechar }) {
+  const [vozes, setVozes] = useState([]);
+  const [escolhida, setEscolhida] = useState(() => localStorage.getItem(CHAVE_VOZ_ESCOLHIDA) || "");
+
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+    function atualizar() {
+      const todas = window.speechSynthesis.getVoices();
+      const pt = todas.filter((v) => v.lang?.toLowerCase().startsWith("pt"));
+      setVozes(pt.length ? pt : todas);
+    }
+    atualizar();
+    window.speechSynthesis.addEventListener("voiceschanged", atualizar);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", atualizar);
+  }, []);
+
+  function escolher(nome) {
+    setEscolhida(nome);
+    localStorage.setItem(CHAVE_VOZ_ESCOLHIDA, nome);
+  }
+
+  function testar(nome) {
+    if (!("speechSynthesis" in window)) return;
+    const voz = vozes.find((v) => v.name === nome);
+    const u = new SpeechSynthesisUtterance("Oi, doutor! Essa é a minha voz.");
+    u.lang = "pt-BR";
+    if (voz) u.voice = voz;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  }
+
+  return (
+    <div className="modal-fundo" onClick={fechar}>
+      <div className="modal-backup" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-topo">
+          <strong>🗣️ Voz da Bella</strong>
+          <button className="fechar" onClick={fechar}>
+            ✕
+          </button>
+        </div>
+
+        <p className="dica">Escolha a voz que a Bella vai usar para falar com você.</p>
+
+        {vozes.length === 0 ? (
+          <p className="dica">
+            Seu navegador não encontrou vozes em português ainda. Tente abrir de novo, ou
+            use o Safari (iPhone/iPad) ou o Chrome.
+          </p>
+        ) : (
+          <div className="lista-vozes">
+            {vozes.map((v) => (
+              <div key={v.name} className={"voz-opcao" + (escolhida === v.name ? " sel" : "")}>
+                <button className="voz-nome" onClick={() => escolher(v.name)}>
+                  {escolhida === v.name ? "●" : "○"} {v.name}
+                </button>
+                <button className="voz-testar" onClick={() => testar(v.name)} title="Ouvir esta voz">
+                  ▶
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
