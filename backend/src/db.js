@@ -57,11 +57,11 @@ export function setConfig(chave, valor) {
 }
 
 /* ---------------- Notas do cofre ---------------- */
+// Nota: a ordenação por título acontece depois de descriptografar (na rota),
+// já que o título fica criptografado no banco e não pode ser ordenado em SQL.
 export function listarNotas() {
   return db
-    .prepare(
-      "SELECT * FROM notas_secretas ORDER BY (categoria IS NULL), categoria COLLATE NOCASE, titulo COLLATE NOCASE"
-    )
+    .prepare("SELECT * FROM notas_secretas ORDER BY (categoria IS NULL), categoria COLLATE NOCASE, id DESC")
     .all();
 }
 export function criarNota({ titulo, conteudo, categoria }) {
@@ -69,6 +69,20 @@ export function criarNota({ titulo, conteudo, categoria }) {
     .prepare("INSERT INTO notas_secretas (titulo, conteudo, categoria) VALUES (?, ?, ?)")
     .run(titulo, conteudo || null, categoria || null);
   return db.prepare("SELECT * FROM notas_secretas WHERE id = ?").get(info.lastInsertRowid);
+}
+export function atualizarNota(id, campos) {
+  const permitidos = ["titulo", "conteudo", "categoria"];
+  const sets = [];
+  const valores = {};
+  for (const c of permitidos) {
+    if (c in campos) {
+      sets.push(`${c} = @${c}`);
+      valores[c] = campos[c];
+    }
+  }
+  if (sets.length === 0) return;
+  valores.id = id;
+  db.prepare(`UPDATE notas_secretas SET ${sets.join(", ")} WHERE id = @id`).run(valores);
 }
 export function apagarNota(id) {
   db.prepare("DELETE FROM notas_secretas WHERE id = ?").run(id);
