@@ -39,6 +39,35 @@ function escolherVoz() {
   return vozes.find((v) => v.lang?.toLowerCase().startsWith("pt")) || null;
 }
 
+// Redimensiona/comprime a foto no navegador antes de mandar pro servidor
+// (evita fotos de 5-10MB do iPhone travando o envio pela rede do hospital).
+function redimensionarImagem(file, maxLado = 1280, qualidade = 0.82) {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onerror = () => reject(new Error("Não consegui ler a foto."));
+    leitor.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Não consegui abrir a foto."));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxLado || height > maxLado) {
+          const escala = maxLado / Math.max(width, height);
+          width = Math.round(width * escala);
+          height = Math.round(height * escala);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", qualidade);
+        resolve({ base64: dataUrl.split(",")[1], mediaType: "image/jpeg", preview: dataUrl });
+      };
+      img.src = leitor.result;
+    };
+    leitor.readAsDataURL(file);
+  });
+}
+
 const CATEGORIAS_COFRE = [
   "🏥 Hospitais & Sistemas Médicos",
   "🏛️ Governo & Conselhos",
@@ -159,6 +188,7 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
   const recogRef = useRef(null);
   const vozRef = useRef(null);
   const modoConversaRef = useRef(false);
+  const fotoInputRef = useRef(null);
 
   useEffect(() => {
     localStorage.setItem(hojeChave(), JSON.stringify(mensagens));
@@ -217,6 +247,32 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
       setMensagens((m) => [
         ...m,
         { role: "assistant", text: "Não consegui responder agora. Tente de novo." },
+      ]);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function enviarFoto(e) {
+    const arquivo = e.target.files?.[0];
+    e.target.value = ""; // permite escolher a mesma foto de novo depois
+    if (!arquivo || ocupado) return;
+    setOcupado(true);
+    try {
+      const { base64, mediaType, preview } = await redimensionarImagem(arquivo);
+      const historico = mensagens;
+      setMensagens((m) => [...m, { role: "user", text: "📷 Foto enviada", foto: preview }]);
+      const { reply, tarefas, contas, acoesWhatsApp } = await enviarMensagem("", historico, { base64, mediaType });
+      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp }]);
+      falar(reply, () => {
+        if (modoConversaRef.current) iniciarEscuta();
+      });
+      if (tarefas && tarefas.length) aposCriarTarefa();
+      if (contas && contas.length) aposCriarConta();
+    } catch {
+      setMensagens((m) => [
+        ...m,
+        { role: "assistant", text: "Não consegui ler essa foto. Tente tirar de novo, com mais luz." },
       ]);
     } finally {
       setOcupado(false);
@@ -283,6 +339,7 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
         )}
         {mensagens.map((m, i) => (
           <div key={i} className={"balao " + m.role}>
+            {m.foto && <img className="foto-msg" src={m.foto} alt="Foto enviada" />}
             <div className="txt">{m.text}</div>
             {m.tarefas?.map((t) => (
               <div key={"t" + t.id} className="chip-tarefa">
@@ -335,6 +392,23 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
           enviar();
         }}
       >
+        <button
+          type="button"
+          className="camera"
+          onClick={() => fotoInputRef.current?.click()}
+          title="Enviar foto para a Bella ler"
+          disabled={ocupado}
+        >
+          📷
+        </button>
+        <input
+          ref={fotoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: "none" }}
+          onChange={enviarFoto}
+        />
         <button type="button" className={"mic " + (ouvindo ? "gravando" : "")} onClick={toggleMic}>
           {ouvindo ? "●" : "🎤"}
         </button>

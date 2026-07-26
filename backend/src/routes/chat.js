@@ -5,12 +5,12 @@ import { conversar } from "../anthropic.js";
 const router = Router();
 
 router.post("/", async (req, res) => {
-  const { message, history } = req.body || {};
-  if (!message || !message.trim()) {
+  const { message, history, imagem } = req.body || {};
+  if ((!message || !message.trim()) && !imagem) {
     return res.status(400).json({ erro: "Mensagem vazia." });
   }
   try {
-    const resultado = await conversar({ message, history: history || [] });
+    const resultado = await conversar({ message, history: history || [], imagem });
     res.json(resultado);
   } catch (err) {
     console.error("Erro no chat:", err);

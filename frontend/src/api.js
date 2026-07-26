@@ -22,11 +22,11 @@ export const atualizarTarefa = (id, campos) =>
 
 export const apagarTarefa = (id) => fetch(`/api/tarefas/${id}`, { method: "DELETE" }).then(json);
 
-export const enviarMensagem = (message, history) =>
+export const enviarMensagem = (message, history, imagem) =>
   fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ message, history, imagem }),
   }).then(json);
 
 /* ---------------- Cofre (área secreta) ---------------- */

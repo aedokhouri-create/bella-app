@@ -181,7 +181,14 @@ function sistema() {
     "Quando ele mencionar uma conta a pagar, boleto, fatura, imposto ou seguro com uma " +
     "data de vencimento, use a ferramenta criar_conta_pagar — não precisa avisar que vai " +
     "usar uma ferramenta, apenas aja. Confirme depois em uma frase curta e natural " +
-    "(ex.: 'Anotei, doutor — o IPTU vence dia 10' em vez de 'Conta criada com sucesso')."
+    "(ex.: 'Anotei, doutor — o IPTU vence dia 10' em vez de 'Conta criada com sucesso').\n\n" +
+    "Quando ele mandar uma foto: se for um boleto, fatura, carnê ou conta com valor e " +
+    "data de vencimento legíveis, leia os dados e use criar_conta_pagar sozinha, sem " +
+    "perguntar — depois confirme em uma frase curta o que você cadastrou (título, valor " +
+    "e vencimento), para ele conferir. Se a data ou o valor não estiverem legíveis, não " +
+    "invente — peça para ele confirmar o que faltou. Se a foto for de outra coisa (um " +
+    "documento, uma receita, uma anotação, um cartão), não crie nada sozinha — apenas " +
+    "descreva o que você viu, do jeito que uma pessoa contaria o que leu."
   );
 }
 
@@ -194,8 +201,9 @@ function historicoParaMensagens(historico = []) {
 
 const FERRAMENTAS = [ferramentaCriarTarefa, ferramentaCriarContaPagar, ferramentaWhatsApp];
 
-// Recebe { message, history } e devolve { reply, tarefas, contas, acoesWhatsApp }.
-export async function conversar({ message, history }) {
+// Recebe { message, history, imagem } e devolve { reply, tarefas, contas, acoesWhatsApp }.
+// imagem (opcional): { base64, mediaType } — uma foto tirada/enviada pelo usuário.
+export async function conversar({ message, history, imagem }) {
   const client = getClient();
   if (!client) {
     return {
@@ -208,7 +216,14 @@ export async function conversar({ message, history }) {
     };
   }
 
-  const messages = [...historicoParaMensagens(history), { role: "user", content: message }];
+  const conteudoUsuario = imagem
+    ? [
+        { type: "image", source: { type: "base64", media_type: imagem.mediaType, data: imagem.base64 } },
+        { type: "text", text: message || "Aqui está a foto." },
+      ]
+    : message;
+
+  const messages = [...historicoParaMensagens(history), { role: "user", content: conteudoUsuario }];
   const tarefasCriadas = [];
   const contasCriadas = [];
   const acoesWhatsApp = [];
