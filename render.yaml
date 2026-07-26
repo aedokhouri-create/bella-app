@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: bella-app
+    env: node
+    plan: starter
+    buildCommand: npm --prefix frontend install && npm --prefix frontend run build && npm --prefix backend install
+    startCommand: node backend/src/server.js
+    disk:
+      name: bella-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /data
+      - key: PORT
+        value: 10000
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-opus-4-8
