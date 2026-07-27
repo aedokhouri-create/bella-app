@@ -71,6 +71,13 @@ db.exec(`
     conteudo TEXT NOT NULL,     -- fato/preferência/contexto que a Bella deve lembrar sempre
     criado_em TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS modelos_documento (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,         -- nome curto pra reconhecer, ex.: "Atestado padrão de afastamento"
+    dados TEXT NOT NULL,        -- JSON: {titulo, subtitulo, secoes, fechamento} — mesmo formato do gerar_documento_docx
+    criado_em TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Migração segura: garante a coluna "categoria" em bancos antigos.
@@ -161,6 +168,23 @@ export function criarMemoria(conteudo) {
 }
 export function apagarMemoria(id) {
   db.prepare("DELETE FROM memorias WHERE id = ?").run(id);
+}
+
+/* ---------------- Modelos de documento reutilizáveis ---------------- */
+export function listarModelos() {
+  return db
+    .prepare("SELECT * FROM modelos_documento ORDER BY id DESC")
+    .all()
+    .map((m) => ({ id: m.id, nome: m.nome, criado_em: m.criado_em, ...JSON.parse(m.dados) }));
+}
+export function criarModelo({ nome, titulo, subtitulo, secoes, fechamento }) {
+  const dados = JSON.stringify({ titulo, subtitulo, secoes, fechamento });
+  const info = db.prepare("INSERT INTO modelos_documento (nome, dados) VALUES (?, ?)").run(nome, dados);
+  const linha = db.prepare("SELECT * FROM modelos_documento WHERE id = ?").get(info.lastInsertRowid);
+  return { id: linha.id, nome: linha.nome, criado_em: linha.criado_em, ...JSON.parse(linha.dados) };
+}
+export function apagarModelo(id) {
+  db.prepare("DELETE FROM modelos_documento WHERE id = ?").run(id);
 }
 
 export function listarTarefas() {

@@ -13,6 +13,8 @@ import backupRouter from "./routes/backup.js";
 import documentosRouter from "./routes/documentos.js";
 import memoriasRouter from "./routes/memorias.js";
 import vozRouter from "./routes/voz.js";
+import modelosRouter from "./routes/modelos.js";
+import { iniciarTarefasAgendadas } from "./tarefasAgendadas.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,6 +32,7 @@ app.use("/api/backup", backupRouter);
 app.use("/api/documentos", documentosRouter);
 app.use("/api/memorias", memoriasRouter);
 app.use("/api/voz", vozRouter);
+app.use("/api/modelos", modelosRouter);
 
 // Em produção, o backend também serve o frontend já compilado (mesmo servidor).
 const frontendDist = path.join(__dirname, "../../frontend/dist");
@@ -46,4 +49,5 @@ app.listen(PORT, () => {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.log("⚠️  ANTHROPIC_API_KEY não configurada — o chat responderá com um aviso até você preencher o .env");
   }
+  iniciarTarefasAgendadas();
 });

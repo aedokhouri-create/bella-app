@@ -317,8 +317,8 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
     setMensagens((m) => [...m, { role: "user", text: msg }]);
     setOcupado(true);
     try {
-      const { reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias } = await enviarMensagem(msg, historico);
-      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias }]);
+      const { reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias, modelos } = await enviarMensagem(msg, historico);
+      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias, modelos }]);
       falar(reply, () => {
         // Modo conversa: assim que ela termina de falar, volta a escutar sozinha.
         if (modoConversaRef.current) iniciarEscuta();
@@ -344,8 +344,8 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
       const { base64, mediaType, preview } = await redimensionarImagem(arquivo);
       const historico = mensagens;
       setMensagens((m) => [...m, { role: "user", text: "📷 Foto enviada", foto: preview }]);
-      const { reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias } = await enviarMensagem("", historico, { base64, mediaType });
-      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias }]);
+      const { reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias, modelos } = await enviarMensagem("", historico, { base64, mediaType });
+      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias, modelos }]);
       falar(reply, () => {
         if (modoConversaRef.current) iniciarEscuta();
       });
@@ -506,6 +506,11 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
             {m.memorias?.map((mm) => (
               <div key={mm.id} className="chip-tarefa chip-memoria">
                 🧠 Guardei: {mm.conteudo}
+              </div>
+            ))}
+            {m.modelos?.map((md) => (
+              <div key={md.id} className="chip-tarefa chip-memoria">
+                📐 Modelo salvo: {md.nome}
               </div>
             ))}
           </div>

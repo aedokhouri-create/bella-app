@@ -2,7 +2,15 @@
 // A IA conversa em português e, quando você pede para lembrar/agendar algo,
 // ela usa a ferramenta "criar_tarefa" para transformar a fala em uma tarefa.
 import Anthropic from "@anthropic-ai/sdk";
-import { criarTarefa, criarConta, buscarContatos, listarMemorias, criarMemoria } from "./db.js";
+import {
+  criarTarefa,
+  criarConta,
+  buscarContatos,
+  listarMemorias,
+  criarMemoria,
+  listarModelos,
+  criarModelo,
+} from "./db.js";
 import { gerarDocumentoDocx } from "./documentos.js";
 import { cadastrarCirurgiaNoCmot } from "./cmot.js";
 
@@ -182,6 +190,44 @@ const ferramentaSalvarMemoria = {
   },
 };
 
+const ferramentaSalvarModeloDocumento = {
+  name: "salvar_modelo_documento",
+  description:
+    "Guarda a estrutura de um documento (título, subtítulo, seções, fechamento) como " +
+    "modelo reutilizável, pra próxima vez que ele pedir algo parecido você já usar como " +
+    "base — sem repetir o trabalho de montar do zero. Use SÓ quando ele pedir " +
+    "explicitamente ('salva isso como modelo', 'guarda esse formato pra próxima vez'). " +
+    "Guarde a ESTRUTURA (títulos de seção, texto genérico de exemplo), não dados " +
+    "específicos de um paciente — troque nome/CPF/datas por marcadores tipo [NOME], " +
+    "[DATA] antes de salvar.",
+  input_schema: {
+    type: "object",
+    properties: {
+      nome: { type: "string", description: "Nome curto pra reconhecer o modelo, ex.: 'Atestado padrão de afastamento'" },
+      titulo: { type: "string" },
+      subtitulo: { type: "string" },
+      secoes: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { titulo: { type: "string" }, texto: { type: "string" } },
+          required: ["titulo", "texto"],
+        },
+      },
+      fechamento: {
+        type: "object",
+        properties: {
+          local: { type: "string" },
+          nome: { type: "string" },
+          especialidade: { type: "string" },
+          crm: { type: "string" },
+        },
+      },
+    },
+    required: ["nome", "titulo", "secoes"],
+  },
+};
+
 const ferramentaCadastrarCirurgiaCmot = {
   name: "cadastrar_cirurgia_cmot",
   description:
@@ -272,7 +318,7 @@ function prepararWhatsApp({ contato, telefone, conta, mensagem }) {
   };
 }
 
-function sistema(memorias = []) {
+function sistema(memorias = [], modelos = []) {
   const agora = new Date();
   const dataHoje = agora.toLocaleDateString("pt-BR", {
     weekday: "long",
@@ -358,7 +404,15 @@ function sistema(memorias = []) {
     (memorias.length
       ? "\n\nO que você já sabe sobre o Dr. Aedo (de conversas anteriores):\n" +
         memorias.map((m) => `— ${m.conteudo}`).join("\n")
-      : "\n\nVocê ainda não tem nenhuma memória guardada sobre ele.")
+      : "\n\nVocê ainda não tem nenhuma memória guardada sobre ele.") +
+    "\n\nQuando ele pedir pra guardar o formato de um documento pra reusar depois " +
+    "('salva isso como modelo'), use a ferramenta salvar_modelo_documento, trocando " +
+    "dados específicos do paciente por marcadores tipo [NOME] antes de salvar." +
+    (modelos.length
+      ? "\n\nModelos de documento já salvos, que você pode usar como base quando ele " +
+        "pedir algo parecido (adapte pro caso novo, não copie dados de exemplo):\n" +
+        modelos.map((m) => `— "${m.nome}" (${m.titulo})`).join("\n")
+      : "")
   );
 }
 
@@ -376,6 +430,7 @@ const FERRAMENTAS = [
   ferramentaGerarDocumento,
   ferramentaCadastrarCirurgiaCmot,
   ferramentaSalvarMemoria,
+  ferramentaSalvarModeloDocumento,
 ];
 
 // Recebe { message, history, imagem } e devolve { reply, tarefas, contas, acoesWhatsApp, documentos }.
@@ -393,6 +448,7 @@ export async function conversar({ message, history, imagem }) {
       documentos: [],
       cmot: [],
       memorias: [],
+      modelos: [],
     };
   }
 
@@ -410,14 +466,16 @@ export async function conversar({ message, history, imagem }) {
   const documentosGerados = [];
   const cmotResultados = [];
   const memoriasSalvas = [];
+  const modelosSalvos = [];
   const memoriasAtuais = listarMemorias();
+  const modelosAtuais = listarModelos();
 
   let resp;
   for (let volta = 0; volta < 4; volta++) {
     resp = await client.messages.create({
       model: MODEL,
       max_tokens: 4096, // relatórios/documentos gerados podem ser longos
-      system: sistema(memoriasAtuais),
+      system: sistema(memoriasAtuais, modelosAtuais),
       tools: FERRAMENTAS,
       output_config: { effort: "low" }, // conversa rápida e barata — não precisa de raciocínio profundo
       messages,
@@ -510,6 +568,14 @@ export async function conversar({ message, history, imagem }) {
           tool_use_id: bloco.id,
           content: `Memória guardada com sucesso (id ${memoria.id}).`,
         });
+      } else if (bloco.name === "salvar_modelo_documento") {
+        const modelo = criarModelo(bloco.input);
+        modelosSalvos.push(modelo);
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: bloco.id,
+          content: `Modelo "${modelo.nome}" guardado com sucesso (id ${modelo.id}).`,
+        });
       }
     }
     messages.push({ role: "assistant", content: resp.content });
@@ -530,5 +596,6 @@ export async function conversar({ message, history, imagem }) {
     documentos: documentosGerados,
     cmot: cmotResultados,
     memorias: memoriasSalvas,
+    modelos: modelosSalvos,
   };
 }
