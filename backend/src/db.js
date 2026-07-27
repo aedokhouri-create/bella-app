@@ -65,6 +65,12 @@ db.exec(`
     dados TEXT NOT NULL,        -- base64 do arquivo, criptografado (mesma chave da nota)
     criado_em TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS memorias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conteudo TEXT NOT NULL,     -- fato/preferência/contexto que a Bella deve lembrar sempre
+    criado_em TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Migração segura: garante a coluna "categoria" em bancos antigos.
@@ -143,6 +149,18 @@ export function buscarArquivo(id) {
 }
 export function apagarArquivo(id) {
   db.prepare("DELETE FROM cofre_arquivos WHERE id = ?").run(id);
+}
+
+/* ---------------- Memória de longo prazo da Bella ---------------- */
+export function listarMemorias() {
+  return db.prepare("SELECT * FROM memorias ORDER BY id DESC").all();
+}
+export function criarMemoria(conteudo) {
+  const info = db.prepare("INSERT INTO memorias (conteudo) VALUES (?)").run(conteudo);
+  return db.prepare("SELECT * FROM memorias WHERE id = ?").get(info.lastInsertRowid);
+}
+export function apagarMemoria(id) {
+  db.prepare("DELETE FROM memorias WHERE id = ?").run(id);
 }
 
 export function listarTarefas() {

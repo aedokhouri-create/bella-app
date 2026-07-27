@@ -110,3 +110,7 @@ export const apagarConta = (id) => fetch(`/api/contas/${id}`, { method: "DELETE"
 
 /* ---------------- Backup ---------------- */
 export const backupInfo = () => fetch("/api/backup/info").then(json);
+
+/* ---------------- Memória de longo prazo ---------------- */
+export const listarMemorias = () => fetch("/api/memorias").then(json);
+export const apagarMemoria = (id) => fetch(`/api/memorias/${id}`, { method: "DELETE" }).then(json);

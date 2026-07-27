@@ -341,6 +341,15 @@ body {
   display: block; text-align: center; text-decoration: none; margin-top: 4px;
 }
 
+/* Memória de longo prazo (modal) */
+.lista-memorias { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+.memoria-item {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+  background: var(--bg); border: 1px solid var(--borda); border-radius: 12px; padding: 10px 12px; font-size: 14px;
+}
+.memoria-item button { border: none; background: none; font-size: 16px; flex: 0 0 auto; opacity: 0.7; }
+.chip-memoria { background: #ede4fb; color: #5b3a99; display: block; margin-top: 6px; }
+
 /* Voz da Bella (modal) */
 .lista-vozes { display: flex; flex-direction: column; gap: 6px; max-height: 45vh; overflow-y: auto; }
 .voz-opcao {

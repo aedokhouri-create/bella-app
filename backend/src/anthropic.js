@@ -2,7 +2,7 @@
 // A IA conversa em português e, quando você pede para lembrar/agendar algo,
 // ela usa a ferramenta "criar_tarefa" para transformar a fala em uma tarefa.
 import Anthropic from "@anthropic-ai/sdk";
-import { criarTarefa, criarConta, buscarContatos } from "./db.js";
+import { criarTarefa, criarConta, buscarContatos, listarMemorias, criarMemoria } from "./db.js";
 import { gerarDocumentoDocx } from "./documentos.js";
 import { cadastrarCirurgiaNoCmot } from "./cmot.js";
 
@@ -161,6 +161,27 @@ const ferramentaGerarDocumento = {
   },
 };
 
+const ferramentaSalvarMemoria = {
+  name: "salvar_memoria",
+  description:
+    "Guarda um fato/preferência/contexto permanente sobre o Dr. Aedo e a vida dele, pra " +
+    "você lembrar em QUALQUER conversa futura, não só hoje (a conversa normal reinicia " +
+    "todo dia, isso não). Use por conta própria, sem precisar que ele peça, quando ele " +
+    "contar algo que vale a pena lembrar sempre: nomes da família, preferências " +
+    "recorrentes, contexto sobre um problema/projeto em andamento, decisões importantes. " +
+    "Não guarde coisas triviais ou só do momento (ex.: 'hoje está chovendo'). Se ele pedir " +
+    "explicitamente ('guarda isso', 'lembra disso sempre'), sempre use a ferramenta. " +
+    "Escreva o conteúdo de um jeito que faça sentido sozinho, sem depender do resto da " +
+    "conversa pra entender.",
+  input_schema: {
+    type: "object",
+    properties: {
+      conteudo: { type: "string", description: "O fato/contexto a lembrar, em uma ou duas frases claras" },
+    },
+    required: ["conteudo"],
+  },
+};
+
 const ferramentaCadastrarCirurgiaCmot = {
   name: "cadastrar_cirurgia_cmot",
   description:
@@ -251,7 +272,7 @@ function prepararWhatsApp({ contato, telefone, conta, mensagem }) {
   };
 }
 
-function sistema() {
+function sistema(memorias = []) {
   const agora = new Date();
   const dataHoje = agora.toLocaleDateString("pt-BR", {
     weekday: "long",
@@ -273,9 +294,11 @@ function sistema() {
     "sem exagerar — um toque natural na conversa, não em toda frase. Fale como se " +
     "estivesse conversando de verdade por voz: frases curtas, naturais, sem parecer um " +
     "robô nem um menu de opções. Nada de listas com marcadores ou formatação — é uma " +
-    "conversa falada. Se ele parecer cansado, apressado ou estressado, seja ainda mais " +
-    "objetiva e gentil. Se algo estiver ambíguo, pergunte de um jeito natural, como uma " +
-    "pessoa perguntaria, em vez de pedir 'mais informações'.\n\n" +
+    "conversa falada, e nada de emoji no meio do texto — isso é lido em voz alta e soa " +
+    "estranho (alguns leitores descrevem o emoji em vez de ignorar). Se ele parecer " +
+    "cansado, apressado ou estressado, seja ainda mais objetiva e gentil. Se algo estiver " +
+    "ambíguo, pergunte de um jeito natural, como uma pessoa perguntaria, em vez de pedir " +
+    "'mais informações'.\n\n" +
     `Hoje é ${dataHoje}, ${horaAgora} (fuso horário da Bahia). ` +
     "Quando ele pedir para lembrar, agendar ou anotar algo, use a ferramenta criar_tarefa " +
     "— não precisa avisar que vai usar uma ferramenta, apenas aja. Se faltar hora ou data, " +
@@ -326,7 +349,16 @@ function sistema() {
     "(paciente, procedimento e hospital são obrigatórios) — não invente CPF, convênio ou " +
     "data de nascimento. Depois de cadastrar, confirme em uma frase curta e natural o que " +
     "aconteceu (paciente novo ou já existente, cirurgia criada ou atualizada), do jeito que " +
-    "você contaria pra ele o que fez de verdade."
+    "você contaria pra ele o que fez de verdade.\n\n" +
+    "A conversa de hoje reinicia todo dia — o que você sabe de verdade, pra sempre, é só o " +
+    "que está guardado como memória (lista abaixo). Use a ferramenta salvar_memoria por " +
+    "conta própria quando ele contar algo que vale lembrar sempre (família, preferências, " +
+    "contexto de um problema em andamento) — não precisa ele pedir, mas se pedir " +
+    "explicitamente, sempre salve. Não precisa avisar que vai salvar, só faça." +
+    (memorias.length
+      ? "\n\nO que você já sabe sobre o Dr. Aedo (de conversas anteriores):\n" +
+        memorias.map((m) => `— ${m.conteudo}`).join("\n")
+      : "\n\nVocê ainda não tem nenhuma memória guardada sobre ele.")
   );
 }
 
@@ -343,6 +375,7 @@ const FERRAMENTAS = [
   ferramentaWhatsApp,
   ferramentaGerarDocumento,
   ferramentaCadastrarCirurgiaCmot,
+  ferramentaSalvarMemoria,
 ];
 
 // Recebe { message, history, imagem } e devolve { reply, tarefas, contas, acoesWhatsApp, documentos }.
@@ -359,6 +392,7 @@ export async function conversar({ message, history, imagem }) {
       acoesWhatsApp: [],
       documentos: [],
       cmot: [],
+      memorias: [],
     };
   }
 
@@ -375,13 +409,15 @@ export async function conversar({ message, history, imagem }) {
   const acoesWhatsApp = [];
   const documentosGerados = [];
   const cmotResultados = [];
+  const memoriasSalvas = [];
+  const memoriasAtuais = listarMemorias();
 
   let resp;
   for (let volta = 0; volta < 4; volta++) {
     resp = await client.messages.create({
       model: MODEL,
       max_tokens: 4096, // relatórios/documentos gerados podem ser longos
-      system: sistema(),
+      system: sistema(memoriasAtuais),
       tools: FERRAMENTAS,
       output_config: { effort: "low" }, // conversa rápida e barata — não precisa de raciocínio profundo
       messages,
@@ -466,6 +502,14 @@ export async function conversar({ message, history, imagem }) {
             is_error: true,
           });
         }
+      } else if (bloco.name === "salvar_memoria") {
+        const memoria = criarMemoria(bloco.input.conteudo);
+        memoriasSalvas.push(memoria);
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: bloco.id,
+          content: `Memória guardada com sucesso (id ${memoria.id}).`,
+        });
       }
     }
     messages.push({ role: "assistant", content: resp.content });
@@ -485,5 +529,6 @@ export async function conversar({ message, history, imagem }) {
     acoesWhatsApp,
     documentos: documentosGerados,
     cmot: cmotResultados,
+    memorias: memoriasSalvas,
   };
 }

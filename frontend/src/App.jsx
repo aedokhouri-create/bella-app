@@ -24,11 +24,22 @@ import {
   atualizarConta,
   apagarConta,
   backupInfo,
+  listarMemorias,
+  apagarMemoria,
 } from "./api.js";
 
 const hojeChave = () => "nina_chat_" + new Date().toISOString().slice(0, 10);
 
 const CHAVE_VOZ_ESCOLHIDA = "bella_voz_escolhida";
+
+// Alguns navegadores/vozes leem emoji em voz alta descrevendo a imagem
+// ("carinha feliz com bochecha rosada") em vez de ignorar — tira antes de falar.
+function removerEmojis(txt) {
+  return String(txt || "")
+    .replace(/\p{Extended_Pictographic}|\p{Emoji_Presentation}|️|‍/gu, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
 
 // Escolhe a melhor voz em português disponível no navegador (varia por
 // aparelho/navegador — o iOS Safari costuma ter "Luciana" como a mais natural).
@@ -97,6 +108,7 @@ export default function App() {
   const [ttsOn, setTtsOn] = useState(true);
   const [backupAberto, setBackupAberto] = useState(false);
   const [vozAberto, setVozAberto] = useState(false);
+  const [memoriaAberta, setMemoriaAberta] = useState(false);
 
   useEffect(() => {
     recarregarTarefas();
@@ -133,6 +145,9 @@ export default function App() {
           </div>
         </div>
         <div className="topo-acoes">
+          <button className="backup-btn" onClick={() => setMemoriaAberta(true)} title="O que a Bella sabe sobre você">
+            🧠
+          </button>
           <button className="backup-btn" onClick={() => setVozAberto(true)} title="Escolher a voz da Bella">
             🗣️
           </button>
@@ -174,6 +189,7 @@ export default function App() {
 
       {backupAberto && <PainelBackup fechar={() => setBackupAberto(false)} />}
       {vozAberto && <PainelVoz fechar={() => setVozAberto(false)} />}
+      {memoriaAberta && <PainelMemoria fechar={() => setMemoriaAberta(false)} />}
 
       <nav className="abas">
         <button className={aba === "conversa" ? "ativa" : ""} onClick={() => setAba("conversa")}>
@@ -237,7 +253,7 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
   // porque aqui é um pedido explícito, não a fala automática de resposta.
   function ouvirTexto(txt) {
     if (!("speechSynthesis" in window)) return;
-    const u = new SpeechSynthesisUtterance(txt);
+    const u = new SpeechSynthesisUtterance(removerEmojis(txt));
     u.lang = "pt-BR";
     u.rate = 1.0;
     u.pitch = 1.05;
@@ -251,7 +267,7 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
       aoTerminar?.();
       return;
     }
-    const u = new SpeechSynthesisUtterance(txt);
+    const u = new SpeechSynthesisUtterance(removerEmojis(txt));
     u.lang = "pt-BR";
     u.rate = 1.0;
     u.pitch = 1.05;
@@ -270,8 +286,8 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
     setMensagens((m) => [...m, { role: "user", text: msg }]);
     setOcupado(true);
     try {
-      const { reply, tarefas, contas, acoesWhatsApp, documentos, cmot } = await enviarMensagem(msg, historico);
-      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos, cmot }]);
+      const { reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias } = await enviarMensagem(msg, historico);
+      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias }]);
       falar(reply, () => {
         // Modo conversa: assim que ela termina de falar, volta a escutar sozinha.
         if (modoConversaRef.current) iniciarEscuta();
@@ -297,8 +313,8 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
       const { base64, mediaType, preview } = await redimensionarImagem(arquivo);
       const historico = mensagens;
       setMensagens((m) => [...m, { role: "user", text: "📷 Foto enviada", foto: preview }]);
-      const { reply, tarefas, contas, acoesWhatsApp, documentos } = await enviarMensagem("", historico, { base64, mediaType });
-      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos }]);
+      const { reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias } = await enviarMensagem("", historico, { base64, mediaType });
+      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias }]);
       falar(reply, () => {
         if (modoConversaRef.current) iniciarEscuta();
       });
@@ -447,6 +463,11 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
               <div key={j} className="chip-tarefa chip-cmot">
                 🏥 CMOT: {c.pacienteNome} ({c.pacienteNovo ? "novo" : "já existia"}) —{" "}
                 {c.atualizada ? "atualizado" : "criado"}
+              </div>
+            ))}
+            {m.memorias?.map((mm) => (
+              <div key={mm.id} className="chip-tarefa chip-memoria">
+                🧠 Guardei: {mm.conteudo}
               </div>
             ))}
           </div>
@@ -946,6 +967,61 @@ function PainelVoz({ fechar }) {
                 </button>
                 <button className="voz-testar" onClick={() => testar(v.name)} title="Ouvir esta voz">
                   ▶
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Memória de longo prazo ---------------- */
+function PainelMemoria({ fechar }) {
+  const [memorias, setMemorias] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+
+  useEffect(() => {
+    listarMemorias()
+      .then(setMemorias)
+      .catch(() => {})
+      .finally(() => setCarregando(false));
+  }, []);
+
+  async function remover(id) {
+    if (!confirm("Apagar esta memória? A Bella vai esquecer disso.")) return;
+    setMemorias((m) => m.filter((x) => x.id !== id));
+    await apagarMemoria(id).catch(() => {});
+  }
+
+  return (
+    <div className="modal-fundo" onClick={fechar}>
+      <div className="modal-backup" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-topo">
+          <strong>🧠 O que a Bella sabe</strong>
+          <button className="fechar" onClick={fechar}>
+            ✕
+          </button>
+        </div>
+
+        <p className="dica">
+          Fatos e contextos que ela guarda pra sempre, em qualquer conversa — diferente do
+          chat do dia, que reinicia todo dia. Ela mesma decide o que vale guardar; aqui você
+          pode conferir e apagar o que quiser.
+        </p>
+
+        {carregando && <p className="dica">Carregando…</p>}
+        {!carregando && memorias.length === 0 && (
+          <p className="dica">Nenhuma memória guardada ainda.</p>
+        )}
+        {memorias.length > 0 && (
+          <div className="lista-memorias">
+            {memorias.map((m) => (
+              <div key={m.id} className="memoria-item">
+                <span>{m.conteudo}</span>
+                <button onClick={() => remover(m.id)} title="Apagar esta memória">
+                  🗑
                 </button>
               </div>
             ))}
