@@ -345,6 +345,8 @@ body {
 .btn-baixar {
   display: block; text-align: center; text-decoration: none; margin-top: 4px;
 }
+.separador { border: none; border-top: 1px solid var(--borda); margin: 6px 0; }
+.lista-status-calendario { list-style: none; padding: 0; margin: 4px 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 
 /* Memória de longo prazo (modal) */
 .lista-memorias { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }

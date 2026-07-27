@@ -123,3 +123,6 @@ export const sintetizarVoz = (texto, voz) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ texto, voz }),
   }).then(json);
+
+/* ---------------- Calendário automático ---------------- */
+export const calendarioStatus = () => fetch("/api/calendario/status").then(json);

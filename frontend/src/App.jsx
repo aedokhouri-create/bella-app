@@ -28,6 +28,7 @@ import {
   apagarMemoria,
   vozStatus,
   sintetizarVoz,
+  calendarioStatus,
 } from "./api.js";
 
 const hojeChave = () => "nina_chat_" + new Date().toISOString().slice(0, 10);
@@ -975,11 +976,15 @@ function formatarData(iso) {
 function PainelBackup({ fechar }) {
   const [info, setInfo] = useState(null);
   const [erro, setErro] = useState("");
+  const [calStatus, setCalStatus] = useState(null);
 
   useEffect(() => {
     backupInfo()
       .then(setInfo)
       .catch(() => setErro("Não consegui verificar o backup agora."));
+    calendarioStatus()
+      .then(setCalStatus)
+      .catch(() => {});
   }, []);
 
   return (
@@ -1015,6 +1020,29 @@ function PainelBackup({ fechar }) {
           Guarde este arquivo no iCloud Drive, Google Drive ou envie por e-mail para você
           mesmo. Recomendo baixar um novo backup pelo menos uma vez por semana.
         </p>
+
+        <hr className="separador" />
+
+        <strong>📅 Calendário automático</strong>
+        {calStatus ? (
+          <ul className="lista-status-calendario">
+            <li>
+              {calStatus.apple ? "🟢" : "⚪️"} Calendário da Apple (iPhone/iPad) —{" "}
+              {calStatus.apple ? "conectado" : "não conectado"}
+            </li>
+            <li>
+              {calStatus.google ? "🟢" : "⚪️"} Google Calendar — {calStatus.google ? "conectado" : "não conectado (em breve)"}
+            </li>
+          </ul>
+        ) : (
+          <p className="dica">Verificando…</p>
+        )}
+        {calStatus && !calStatus.apple && (
+          <p className="dica">
+            Quando você gerar a senha de app do seu Apple ID e eu configurar no servidor, toda
+            tarefa e conta com data passa a aparecer sozinha no Calendário do iPhone.
+          </p>
+        )}
       </div>
     </div>
   );

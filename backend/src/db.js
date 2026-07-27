@@ -86,6 +86,14 @@ db.exec(`
   if (!cols.includes("categoria")) db.exec("ALTER TABLE notas_secretas ADD COLUMN categoria TEXT");
 }
 
+// Migração segura: colunas de sincronização com Calendário da Apple/Google.
+for (const tabela of ["tarefas", "contas_pagar"]) {
+  const cols = db.prepare(`PRAGMA table_info(${tabela})`).all().map((c) => c.name);
+  for (const coluna of ["cal_apple_uid", "cal_apple_url", "cal_google_id"]) {
+    if (!cols.includes(coluna)) db.exec(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} TEXT`);
+  }
+}
+
 /* ---------------- Config (chave/valor) ---------------- */
 export function getConfig(chave) {
   const row = db.prepare("SELECT valor FROM config WHERE chave = ?").get(chave);
@@ -198,6 +206,10 @@ export function listarTarefas() {
     .all();
 }
 
+export function buscarTarefa(id) {
+  return db.prepare("SELECT * FROM tarefas WHERE id = ?").get(id);
+}
+
 export function criarTarefa(t) {
   const info = db
     .prepare(
@@ -233,6 +245,10 @@ export function atualizarTarefa(id, campos) {
 
 export function apagarTarefa(id) {
   db.prepare("DELETE FROM tarefas WHERE id = ?").run(id);
+}
+
+export function salvarSyncAppleTarefa(id, uid, url) {
+  db.prepare("UPDATE tarefas SET cal_apple_uid = ?, cal_apple_url = ? WHERE id = ?").run(uid, url, id);
 }
 
 /* ---------------- Contatos (para enviar WhatsApp) ---------------- */
@@ -272,6 +288,10 @@ export function listarContas() {
     .prepare(`SELECT * FROM contas_pagar ORDER BY status ASC, vencimento ASC, id DESC`)
     .all();
 }
+export function buscarConta(id) {
+  return db.prepare("SELECT * FROM contas_pagar WHERE id = ?").get(id);
+}
+
 export function criarConta(c) {
   const info = db
     .prepare(
@@ -303,6 +323,10 @@ export function atualizarConta(id, campos) {
 }
 export function apagarConta(id) {
   db.prepare("DELETE FROM contas_pagar WHERE id = ?").run(id);
+}
+
+export function salvarSyncAppleConta(id, uid, url) {
+  db.prepare("UPDATE contas_pagar SET cal_apple_uid = ?, cal_apple_url = ? WHERE id = ?").run(uid, url, id);
 }
 
 export default db;
