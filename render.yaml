@@ -28,3 +28,7 @@ services:
         sync: false
       - key: GOOGLE_TTS_API_KEY
         sync: false
+      - key: BACKUP_EMAIL_USER
+        sync: false
+      - key: BACKUP_EMAIL_PASS
+        sync: false
