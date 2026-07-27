@@ -567,6 +567,50 @@ function isoDe(d) {
   return d.toISOString().slice(0, 10);
 }
 
+// Exporta um item (tarefa ou conta) como arquivo .ics — ao tocar, o iPhone
+// oferece "Adicionar ao Calendário" direto, sem precisar de conta/permissão externa.
+function icsEscapar(txt) {
+  return String(txt || "")
+    .replace(/[\\;,]/g, (c) => "\\" + c)
+    .replace(/\n/g, "\\n");
+}
+
+function gerarICS({ titulo, data, hora, descricao }) {
+  const carimbo = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  const uid = `bella-${data}-${Math.random().toString(36).slice(2)}@bella-app`;
+  const dtStart = hora
+    ? `DTSTART:${data.replace(/-/g, "")}T${hora.replace(":", "")}00`
+    : `DTSTART;VALUE=DATE:${data.replace(/-/g, "")}`;
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Bella//Agenda//PT",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${carimbo}`,
+    dtStart,
+    `SUMMARY:${icsEscapar(titulo)}`,
+    descricao ? `DESCRIPTION:${icsEscapar(descricao)}` : null,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ]
+    .filter(Boolean)
+    .join("\r\n");
+}
+
+function baixarICS({ titulo, data, hora, descricao }) {
+  const conteudo = gerarICS({ titulo, data, hora, descricao });
+  const blob = new Blob([conteudo], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${titulo.replace(/[^\w-]+/g, "_").slice(0, 40)}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 function Agenda({ tarefas, recarregarTarefas, setTarefas, contas, recarregarContas, setContas }) {
   const [sub, setSub] = useState("tarefas"); // tarefas | contas
 
@@ -670,6 +714,17 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
                 {t.descricao && <div className="desc">{t.descricao}</div>}
               </div>
               <div className="acoes">
+                {t.data && (
+                  <button
+                    className="add-calendario"
+                    onClick={() =>
+                      baixarICS({ titulo: t.titulo, data: t.data, hora: t.hora, descricao: t.descricao })
+                    }
+                    title="Adicionar ao Calendário do iPhone"
+                  >
+                    📅
+                  </button>
+                )}
                 {t.status !== "concluida" && (
                   <button className="adiar" onClick={() => adiar(t)} title="Adiar 1 dia">
                     💤
@@ -782,6 +837,19 @@ function ListaContas({ contas, recarregar, setContas }) {
                   </div>
                 </div>
                 <div className="acoes">
+                  <button
+                    className="add-calendario"
+                    onClick={() =>
+                      baixarICS({
+                        titulo: `💰 ${c.titulo}`,
+                        data: c.vencimento,
+                        descricao: c.valor != null ? `Valor: R$ ${Number(c.valor).toFixed(2)}` : "",
+                      })
+                    }
+                    title="Adicionar ao Calendário do iPhone"
+                  >
+                    📅
+                  </button>
                   <button className="apagar" onClick={() => remover(c)} title="Apagar">
                     🗑
                   </button>
