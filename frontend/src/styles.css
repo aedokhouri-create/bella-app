@@ -123,6 +123,10 @@ body {
 .vazio-capa { margin-top: 0; padding-top: 18px; }
 .dica { font-size: 14px; }
 .dica em { color: var(--teal-d); }
+.btn-foto-inicial {
+  margin-top: 14px; border: none; background: var(--teal); color: #fff;
+  padding: 12px 22px; border-radius: 22px; font-size: 15px; font-weight: 600;
+}
 
 /* Agenda (Tarefas + Contas a pagar) */
 .painel-tarefas { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }

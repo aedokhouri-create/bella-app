@@ -413,6 +413,13 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
               <br />
               <em>"Lembra de ligar pro Fernando amanhã de manhã"</em>
             </p>
+            <button
+              type="button"
+              className="btn-foto-inicial"
+              onClick={() => fotoInputRef.current?.click()}
+            >
+              📷 Tirar foto ou anexar
+            </button>
           </div>
         )}
         {mensagens.map((m, i) => (
