@@ -65,6 +65,7 @@ body {
   padding: 6px 10px; border-radius: 10px; display: inline-block;
 }
 .chip-conta { background: #fdeed2; color: #8a5a10; margin-left: 6px; }
+.chip-cmot { background: #e0f2e9; color: #1a6b45; display: block; margin-top: 6px; }
 .btn-ouvir {
   display: inline-block; margin-top: 6px; border: none; background: none; color: var(--cinza);
   font-size: 12px; padding: 2px 0;

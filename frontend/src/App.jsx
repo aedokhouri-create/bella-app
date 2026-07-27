@@ -270,8 +270,8 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
     setMensagens((m) => [...m, { role: "user", text: msg }]);
     setOcupado(true);
     try {
-      const { reply, tarefas, contas, acoesWhatsApp, documentos } = await enviarMensagem(msg, historico);
-      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos }]);
+      const { reply, tarefas, contas, acoesWhatsApp, documentos, cmot } = await enviarMensagem(msg, historico);
+      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos, cmot }]);
       falar(reply, () => {
         // Modo conversa: assim que ela termina de falar, volta a escutar sozinha.
         if (modoConversaRef.current) iniciarEscuta();
@@ -442,6 +442,12 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
               <a key={d.id} className="btn-documento" href={d.url} download>
                 📄 Baixar "{d.titulo}" (.docx)
               </a>
+            ))}
+            {m.cmot?.map((c, j) => (
+              <div key={j} className="chip-tarefa chip-cmot">
+                🏥 CMOT: {c.pacienteNome} ({c.pacienteNovo ? "novo" : "já existia"}) —{" "}
+                {c.atualizada ? "atualizado" : "criado"}
+              </div>
             ))}
           </div>
         ))}

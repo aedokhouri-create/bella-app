@@ -4,6 +4,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { criarTarefa, criarConta, buscarContatos } from "./db.js";
 import { gerarDocumentoDocx } from "./documentos.js";
+import { cadastrarCirurgiaNoCmot } from "./cmot.js";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
 
@@ -160,6 +161,36 @@ const ferramentaGerarDocumento = {
   },
 };
 
+const ferramentaCadastrarCirurgiaCmot = {
+  name: "cadastrar_cirurgia_cmot",
+  description:
+    "Cadastra ou atualiza uma cirurgia diretamente no CMOT (sistema da clínica) — use SÓ " +
+    "quando ele pedir explicitamente pra registrar/cadastrar uma cirurgia no CMOT (ex.: " +
+    "'cadastra essa cirurgia no CMOT', 'registra isso lá no sistema da clínica'), por foto " +
+    "da descrição cirúrgica + comando, ou só por comando. Ela reaproveita a mesma lógica do " +
+    "Registro Rápido do CMOT: procura o paciente pelo nome/CPF (se já existe, usa o mesmo; " +
+    "senão cria um novo) e procura uma cirurgia AGENDADA/AUTORIZADA do mesmo paciente pra " +
+    "atualizar para REALIZADA — senão cria uma nova já como REALIZADA. Peça os dados que " +
+    "faltarem antes de chamar (paciente e procedimento e hospital são obrigatórios) — não " +
+    "invente CPF, data de nascimento nem convênio se não estiverem claros.",
+  input_schema: {
+    type: "object",
+    properties: {
+      paciente_nome: { type: "string", description: "Nome completo do paciente" },
+      cpf: { type: "string", description: "CPF do paciente, se souber" },
+      nascimento: { type: "string", description: "Data de nascimento YYYY-MM-DD, se souber" },
+      telefone: { type: "string", description: "Telefone do paciente, se souber" },
+      procedimento: { type: "string", description: "Descrição do procedimento/cirurgia realizada" },
+      hospital: { type: "string", description: "Hospital onde foi realizada" },
+      convenio: { type: "string", description: "Convênio/plano, se souber" },
+      data: { type: "string", description: "Data da cirurgia YYYY-MM-DD (padrão: hoje)" },
+      tipo: { type: "string", enum: ["ELETIVA", "URGENCIA"] },
+      observacoes: { type: "string", description: "Observações clínicas/descrição cirúrgica" },
+    },
+    required: ["paciente_nome", "procedimento", "hospital"],
+  },
+};
+
 function montarLinkWhatsApp(numero, conta, mensagem) {
   const texto = encodeURIComponent(mensagem || "");
   if (conta === "profissional") {
@@ -286,7 +317,16 @@ function sistema() {
     "conferir coerência de datas/CID-10 antes). Depois de gerar, avise em uma frase curta " +
     "e natural que o arquivo está pronto pra baixar — e se houver algo para ele revisar ou " +
     "preencher, conte isso também, sempre deixando claro que é um rascunho para conferir, " +
-    "nunca diga que está pronto para enviar."
+    "nunca diga que está pronto para enviar.\n\n" +
+    "Quando ele pedir EXPLICITAMENTE pra cadastrar/registrar uma cirurgia no CMOT (sistema " +
+    "da clínica) — por foto da descrição cirúrgica + comando, ou só por comando — use a " +
+    "ferramenta cadastrar_cirurgia_cmot. Só chame essa ferramenta se ele mencionar CMOT, " +
+    "'sistema da clínica' ou deixar claro que quer isso registrado lá — nunca chame por " +
+    "conta própria só porque ele descreveu uma cirurgia. Peça os dados que faltarem antes " +
+    "(paciente, procedimento e hospital são obrigatórios) — não invente CPF, convênio ou " +
+    "data de nascimento. Depois de cadastrar, confirme em uma frase curta e natural o que " +
+    "aconteceu (paciente novo ou já existente, cirurgia criada ou atualizada), do jeito que " +
+    "você contaria pra ele o que fez de verdade."
   );
 }
 
@@ -297,7 +337,13 @@ function historicoParaMensagens(historico = []) {
     .map((m) => ({ role: m.role, content: m.text }));
 }
 
-const FERRAMENTAS = [ferramentaCriarTarefa, ferramentaCriarContaPagar, ferramentaWhatsApp, ferramentaGerarDocumento];
+const FERRAMENTAS = [
+  ferramentaCriarTarefa,
+  ferramentaCriarContaPagar,
+  ferramentaWhatsApp,
+  ferramentaGerarDocumento,
+  ferramentaCadastrarCirurgiaCmot,
+];
 
 // Recebe { message, history, imagem } e devolve { reply, tarefas, contas, acoesWhatsApp, documentos }.
 // imagem (opcional): { base64, mediaType } — uma foto tirada/enviada pelo usuário.
@@ -312,6 +358,7 @@ export async function conversar({ message, history, imagem }) {
       contas: [],
       acoesWhatsApp: [],
       documentos: [],
+      cmot: [],
     };
   }
 
@@ -327,6 +374,7 @@ export async function conversar({ message, history, imagem }) {
   const contasCriadas = [];
   const acoesWhatsApp = [];
   const documentosGerados = [];
+  const cmotResultados = [];
 
   let resp;
   for (let volta = 0; volta < 4; volta++) {
@@ -392,6 +440,32 @@ export async function conversar({ message, history, imagem }) {
             is_error: true,
           });
         }
+      } else if (bloco.name === "cadastrar_cirurgia_cmot") {
+        try {
+          const r = await cadastrarCirurgiaNoCmot(bloco.input);
+          cmotResultados.push({
+            pacienteNome: r.paciente.nome,
+            pacienteNovo: r.pacienteNovo,
+            procedimento: r.cirurgia.procedimento,
+            atualizada: r.atualizada,
+          });
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: bloco.id,
+            content:
+              `Cadastrado com sucesso no CMOT. Paciente ${r.pacienteNovo ? "criado agora" : "já existia"}: ` +
+              `${r.paciente.nome}. Cirurgia ${r.atualizada ? "atualizada para REALIZADA" : "criada como REALIZADA"}: ` +
+              `${r.cirurgia.procedimento}.`,
+          });
+        } catch (err) {
+          console.error("Erro ao cadastrar no CMOT:", err);
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: bloco.id,
+            content: `Não consegui cadastrar no CMOT agora (${err.message}). Avise o usuário e sugira tentar de novo, ou fazer manualmente no app do CMOT.`,
+            is_error: true,
+          });
+        }
       }
     }
     messages.push({ role: "assistant", content: resp.content });
@@ -410,5 +484,6 @@ export async function conversar({ message, history, imagem }) {
     contas: contasCriadas,
     acoesWhatsApp,
     documentos: documentosGerados,
+    cmot: cmotResultados,
   };
 }

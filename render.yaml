@@ -20,3 +20,9 @@ services:
         sync: false
       - key: ANTHROPIC_MODEL
         value: claude-opus-4-8
+      - key: CMOT_BASE_URL
+        value: https://cmot-app.onrender.com
+      - key: CMOT_EMAIL
+        sync: false
+      - key: CMOT_SENHA
+        sync: false
