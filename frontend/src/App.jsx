@@ -1500,28 +1500,31 @@ function ArquivosNota({ pin, nota }) {
   }
 
   async function anexar(e) {
-    const arquivo = e.target.files?.[0];
+    const arquivos = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!arquivo) return;
+    if (!arquivos.length) return;
     setEnviando(true);
-    try {
-      const leitor = new FileReader();
-      const base64 = await new Promise((resolve, reject) => {
-        leitor.onerror = () => reject(new Error("Não consegui ler o arquivo."));
-        leitor.onload = () => resolve(leitor.result.split(",")[1]);
-        leitor.readAsDataURL(arquivo);
-      });
-      const novo = await cofreAnexarArquivo(pin, nota.id, {
-        nomeOriginal: arquivo.name,
-        tipoMime: arquivo.type,
-        base64,
-      });
-      setArquivos((a) => [...a, novo]);
-    } catch {
-      alert("Não consegui anexar esse arquivo. Tenta de novo.");
-    } finally {
-      setEnviando(false);
+    let falhas = 0;
+    for (const arquivo of arquivos) {
+      try {
+        const leitor = new FileReader();
+        const base64 = await new Promise((resolve, reject) => {
+          leitor.onerror = () => reject(new Error("Não consegui ler o arquivo."));
+          leitor.onload = () => resolve(leitor.result.split(",")[1]);
+          leitor.readAsDataURL(arquivo);
+        });
+        const novo = await cofreAnexarArquivo(pin, nota.id, {
+          nomeOriginal: arquivo.name,
+          tipoMime: arquivo.type,
+          base64,
+        });
+        setArquivos((a) => [...a, novo]);
+      } catch {
+        falhas++;
+      }
     }
+    setEnviando(false);
+    if (falhas) alert(`Não consegui anexar ${falhas} arquivo(s). Tenta de novo com esses.`);
   }
 
   async function baixar(arquivoId) {
@@ -1563,6 +1566,7 @@ function ArquivosNota({ pin, nota }) {
             ref={fileRef}
             type="file"
             accept="image/*,.pdf"
+            multiple
             style={{ display: "none" }}
             onChange={anexar}
           />
