@@ -253,6 +253,11 @@ body {
   font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 20px;
   text-decoration: none;
 }
+.btn-documento {
+  display: inline-block; margin-top: 8px; background: var(--teal); color: #fff;
+  font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 20px;
+  text-decoration: none;
+}
 
 /* Contatos */
 .painel-contatos { flex: 1; overflow-y: auto; padding: 14px; }

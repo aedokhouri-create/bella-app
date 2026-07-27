@@ -248,8 +248,8 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
     setMensagens((m) => [...m, { role: "user", text: msg }]);
     setOcupado(true);
     try {
-      const { reply, tarefas, contas, acoesWhatsApp } = await enviarMensagem(msg, historico);
-      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp }]);
+      const { reply, tarefas, contas, acoesWhatsApp, documentos } = await enviarMensagem(msg, historico);
+      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos }]);
       falar(reply, () => {
         // Modo conversa: assim que ela termina de falar, volta a escutar sozinha.
         if (modoConversaRef.current) iniciarEscuta();
@@ -275,8 +275,8 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
       const { base64, mediaType, preview } = await redimensionarImagem(arquivo);
       const historico = mensagens;
       setMensagens((m) => [...m, { role: "user", text: "📷 Foto enviada", foto: preview }]);
-      const { reply, tarefas, contas, acoesWhatsApp } = await enviarMensagem("", historico, { base64, mediaType });
-      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp }]);
+      const { reply, tarefas, contas, acoesWhatsApp, documentos } = await enviarMensagem("", historico, { base64, mediaType });
+      setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos }]);
       falar(reply, () => {
         if (modoConversaRef.current) iniciarEscuta();
       });
@@ -382,6 +382,11 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
                 }}
               >
                 📲 Abrir WhatsApp ({a.conta}) para {a.contato}
+              </a>
+            ))}
+            {m.documentos?.map((d) => (
+              <a key={d.id} className="btn-documento" href={d.url} download>
+                📄 Baixar "{d.titulo}" (.docx)
               </a>
             ))}
           </div>

@@ -10,6 +10,7 @@ import cofreRouter from "./routes/cofre.js";
 import contatosRouter from "./routes/contatos.js";
 import contasRouter from "./routes/contas.js";
 import backupRouter from "./routes/backup.js";
+import documentosRouter from "./routes/documentos.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,6 +25,7 @@ app.use("/api/cofre", cofreRouter);
 app.use("/api/contatos", contatosRouter);
 app.use("/api/contas", contasRouter);
 app.use("/api/backup", backupRouter);
+app.use("/api/documentos", documentosRouter);
 
 // Em produção, o backend também serve o frontend já compilado (mesmo servidor).
 const frontendDist = path.join(__dirname, "../../frontend/dist");

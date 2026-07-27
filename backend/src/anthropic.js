@@ -3,6 +3,7 @@
 // ela usa a ferramenta "criar_tarefa" para transformar a fala em uma tarefa.
 import Anthropic from "@anthropic-ai/sdk";
 import { criarTarefa, criarConta, buscarContatos } from "./db.js";
+import { gerarDocumentoDocx } from "./documentos.js";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
 
@@ -82,6 +83,80 @@ const ferramentaWhatsApp = {
       mensagem: { type: "string", description: "Texto da mensagem" },
     },
     required: ["mensagem"],
+  },
+};
+
+const ferramentaGerarDocumento = {
+  name: "gerar_documento_docx",
+  description:
+    "Gera um documento médico/legal de verdade (arquivo .docx para baixar) — use quando " +
+    "ele pedir um relatório médico, laudo, contestação de glosa, orçamento hospitalar/de " +
+    "honorários ou atestado (por foto de guia/documento + comando, ou só por comando). " +
+    "Ele é médico ASSISTENTE, não perito: nunca escreva conclusão pericial, nexo causal " +
+    "com trabalho/acidente ou linguagem de parecer, salvo se ele pedir isso expressamente " +
+    "— descreva quadro clínico, diagnóstico, evolução, tratamento e limitação funcional. " +
+    "Confira coerência antes de gerar: datas (trauma/cirurgia/relatório) não podem se " +
+    "contradizer; 'definitivo/permanente' só se compatível com o tempo desde a última " +
+    "cirurgia; CID-10 citado deve bater com o quadro clínico descrito — se notar " +
+    "divergência, não gere ainda, pergunte antes. Se um dado só ele pode saber (nº de " +
+    "dias de afastamento, data, achado de exame), use '[____]' no campo em vez de inventar.",
+  input_schema: {
+    type: "object",
+    properties: {
+      titulo: {
+        type: "string",
+        description:
+          "Tipo do documento em maiúsculas, ex.: 'RELATÓRIO MÉDICO', 'CONTESTAÇÃO DE GLOSA', " +
+          "'ORÇAMENTO DE HONORÁRIOS MÉDICOS', 'SOLICITAÇÃO DE ORÇAMENTO HOSPITALAR', 'ATESTADO MÉDICO'",
+      },
+      subtitulo: {
+        type: "string",
+        description: "Subtítulo curto do procedimento/contexto, ex.: 'Cirurgia do Punho com Lesões Associadas'",
+      },
+      identificacao: {
+        type: "object",
+        description:
+          "Pares rótulo/valor para o bloco de identificação (Paciente, Data de Nascimento, " +
+          "Convênio/Carteirinha, Hospital, Data do Procedimento, Cirurgião — sempre 'Dr. Aedo " +
+          "Khouri — CRM-BA 27014' salvo se ele pedir outro nome). Use '[____]' quando faltar dado.",
+        additionalProperties: { type: "string" },
+      },
+      secoes: {
+        type: "array",
+        description:
+          "Seções numeradas do corpo, em ordem (ex.: Diagnóstico, Procedimentos Realizados, " +
+          "Fundamentação Técnica — citando ANS/CBHPM/SBOT/CFM quando for glosa —, Conclusão e Pedido).",
+        items: {
+          type: "object",
+          properties: {
+            titulo: { type: "string" },
+            texto: { type: "string", description: "Texto da seção; parágrafos separados por \\n" },
+          },
+          required: ["titulo", "texto"],
+        },
+      },
+      fechamento: {
+        type: "object",
+        properties: {
+          local: { type: "string", description: "Cidade, ex.: 'Salvador/BA'" },
+          data: { type: "string", description: "Data por extenso, ou '[data]' se não souber" },
+          nome: { type: "string", description: "Ex.: 'Dr. Aedo Khouri'" },
+          especialidade: { type: "string", description: "Ex.: 'Cirurgia da Mão e Microcirurgia Reconstrutiva'" },
+          crm: { type: "string", description: "Ex.: 'CRM-BA 27014'" },
+        },
+      },
+      bilingue: {
+        type: "boolean",
+        description: "true se for documento para seguradora internacional (JAG/AIG) — nesse caso escreva cada seção em português seguido da tradução em inglês.",
+      },
+      avisos: {
+        type: "string",
+        description:
+          "O que ele precisa revisar/preencher antes de usar (campos faltando, divergências de " +
+          "data/CID-10 notadas). NÃO entra no documento — é só para você contar pra ele no chat.",
+      },
+    },
+    required: ["titulo", "identificacao", "secoes"],
   },
 };
 
@@ -195,31 +270,13 @@ function sistema() {
     "descreva o que você viu, do jeito que uma pessoa contaria o que leu.\n\n" +
     "Quando ele pedir um relatório médico, laudo, contestação de glosa, orçamento " +
     "hospitalar/de honorários ou atestado (por foto de guia/documento + comando, ou só " +
-    "por comando) — aí você MUDA de registro: em vez da conversa falada e curta, escreva " +
-    "o documento completo, formal, em português, dentro da própria resposta, pronto para " +
-    "ele copiar para o Word. Regras obrigatórias desse tipo de documento:\n" +
-    "— Ele é médico ASSISTENTE, não perito: nunca escreva conclusão pericial, nexo causal " +
-    "com trabalho/acidente ou linguagem de parecer, salvo se ele pedir isso expressamente. " +
-    "Descreva quadro clínico, diagnóstico, evolução, tratamento e limitação funcional — a " +
-    "conclusão jurídica cabe ao perito/advogado.\n" +
-    "— Nunca deixe campo em branco silenciosamente: se um dado só ele pode saber (nº de " +
-    "dias de afastamento, data, achado de exame ainda não descrito), marque com algo " +
-    "tipo [____] e avise depois, fora do documento, quais campos faltam preencher.\n" +
-    "— Confira coerência: datas (trauma/cirurgia/relatório) não podem se contradizer; " +
-    "'definitivo/permanente' só se compatível com o tempo desde a última cirurgia; CID-10 " +
-    "citado deve bater com o quadro clínico descrito. Se notar qualquer divergência, " +
-    "avise antes de gerar em vez de decidir sozinha.\n" +
-    "— Estrutura: título do tipo de documento + subtítulo do procedimento; bloco de " +
-    "identificação (paciente, data nasc., convênio/carteirinha, hospital, data do " +
-    "procedimento, cirurgião + CRM); corpo em seções numeradas (diagnóstico → " +
-    "procedimentos → fundamentação técnica, citando ANS/CBHPM/SBOT/CFM quando for glosa " +
-    "→ conclusão/pedido); fechamento com cidade + data, linha de assinatura, nome do " +
-    "médico, especialidade e CRM-BA 27014.\n" +
-    "— Documento para JAG/AIG (seguradora internacional): gerar versão bilíngue " +
-    "português/inglês.\n" +
-    "Depois do documento, feche com uma frase curta e natural avisando o que ele precisa " +
-    "revisar ou preencher antes de usar — nunca diga que o documento está pronto para " +
-    "enviar sem essa ressalva, porque é sempre um rascunho para ele conferir."
+    "por comando), use a ferramenta gerar_documento_docx — ela gera um arquivo .docx de " +
+    "verdade, pronto para baixar. Preencha todos os campos que a ferramenta pedir seguindo " +
+    "as regras dela (médico assistente, não perito; sem campo em branco silencioso; " +
+    "conferir coerência de datas/CID-10 antes). Depois de gerar, avise em uma frase curta " +
+    "e natural que o arquivo está pronto pra baixar — e se houver algo para ele revisar ou " +
+    "preencher, conte isso também, sempre deixando claro que é um rascunho para conferir, " +
+    "nunca diga que está pronto para enviar."
   );
 }
 
@@ -230,9 +287,9 @@ function historicoParaMensagens(historico = []) {
     .map((m) => ({ role: m.role, content: m.text }));
 }
 
-const FERRAMENTAS = [ferramentaCriarTarefa, ferramentaCriarContaPagar, ferramentaWhatsApp];
+const FERRAMENTAS = [ferramentaCriarTarefa, ferramentaCriarContaPagar, ferramentaWhatsApp, ferramentaGerarDocumento];
 
-// Recebe { message, history, imagem } e devolve { reply, tarefas, contas, acoesWhatsApp }.
+// Recebe { message, history, imagem } e devolve { reply, tarefas, contas, acoesWhatsApp, documentos }.
 // imagem (opcional): { base64, mediaType } — uma foto tirada/enviada pelo usuário.
 export async function conversar({ message, history, imagem }) {
   const client = getClient();
@@ -244,6 +301,7 @@ export async function conversar({ message, history, imagem }) {
       tarefas: [],
       contas: [],
       acoesWhatsApp: [],
+      documentos: [],
     };
   }
 
@@ -258,12 +316,13 @@ export async function conversar({ message, history, imagem }) {
   const tarefasCriadas = [];
   const contasCriadas = [];
   const acoesWhatsApp = [];
+  const documentosGerados = [];
 
   let resp;
   for (let volta = 0; volta < 4; volta++) {
     resp = await client.messages.create({
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: 4096, // relatórios/documentos gerados podem ser longos
       system: sistema(),
       tools: FERRAMENTAS,
       output_config: { effort: "low" }, // conversa rápida e barata — não precisa de raciocínio profundo
@@ -301,6 +360,28 @@ export async function conversar({ message, history, imagem }) {
           content: resultado.mensagemParaIA,
           is_error: !resultado.ok,
         });
+      } else if (bloco.name === "gerar_documento_docx") {
+        const { avisos, ...dadosDocumento } = bloco.input;
+        try {
+          const { id } = await gerarDocumentoDocx(dadosDocumento);
+          documentosGerados.push({ id, url: `/api/documentos/${id}`, titulo: dadosDocumento.titulo });
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: bloco.id,
+            content:
+              `Documento gerado com sucesso (id ${id}). ` +
+              (avisos ? `Avisos para o usuário: ${avisos}` : "Sem avisos pendentes.") +
+              " Lembre o usuário que é um rascunho para ele revisar antes de usar.",
+          });
+        } catch (err) {
+          console.error("Erro ao gerar documento:", err);
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: bloco.id,
+            content: "Não consegui gerar o arquivo agora. Avise o usuário para tentar de novo.",
+            is_error: true,
+          });
+        }
       }
     }
     messages.push({ role: "assistant", content: resp.content });
@@ -313,5 +394,11 @@ export async function conversar({ message, history, imagem }) {
     .join("\n")
     .trim();
 
-  return { reply: reply || "Pronto!", tarefas: tarefasCriadas, contas: contasCriadas, acoesWhatsApp };
+  return {
+    reply: reply || "Pronto!",
+    tarefas: tarefasCriadas,
+    contas: contasCriadas,
+    acoesWhatsApp,
+    documentos: documentosGerados,
+  };
 }
