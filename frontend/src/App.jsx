@@ -26,6 +26,8 @@ import {
   backupInfo,
   listarMemorias,
   apagarMemoria,
+  vozStatus,
+  sintetizarVoz,
 } from "./api.js";
 
 const hojeChave = () => "nina_chat_" + new Date().toISOString().slice(0, 10);
@@ -39,6 +41,17 @@ function removerEmojis(txt) {
     .replace(/\p{Extended_Pictographic}|\p{Emoji_Presentation}|️|‍/gu, "")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
+}
+
+// Único áudio de voz (Google) tocando por vez — módulo, não estado de
+// componente, pra o botão de som no topo conseguir interromper de qualquer lugar.
+let audioVozAtual = null;
+function pararFala() {
+  window.speechSynthesis?.cancel();
+  if (audioVozAtual) {
+    audioVozAtual.pause();
+    audioVozAtual = null;
+  }
 }
 
 // Escolhe a melhor voz em português disponível no navegador (varia por
@@ -159,7 +172,7 @@ export default function App() {
             onClick={() => {
               // Sempre interrompe uma fala em andamento na hora, além de alternar
               // se as próximas respostas devem falar sozinhas ou não.
-              window.speechSynthesis?.cancel();
+              pararFala();
               setTtsOn((v) => !v);
             }}
             title="Ligar/desligar a voz da assistente (toque pra parar de falar agora)"
@@ -249,33 +262,51 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
     modoConversaRef.current = modoConversa;
   }, [modoConversa]);
 
-  // Fala sob demanda (botão "Ouvir" em qualquer mensagem) — ignora o ttsOn,
-  // porque aqui é um pedido explícito, não a fala automática de resposta.
-  function ouvirTexto(txt) {
-    if (!("speechSynthesis" in window)) return;
-    const u = new SpeechSynthesisUtterance(removerEmojis(txt));
-    u.lang = "pt-BR";
-    u.rate = 1.0;
-    u.pitch = 1.05;
-    if (vozRef.current) u.voice = vozRef.current;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
-  }
-
-  function falar(txt, aoTerminar) {
-    if (!ttsOn || !("speechSynthesis" in window)) {
+  // Se a voz escolhida for do Google (mais natural), busca o áudio pronto no
+  // servidor e toca; senão usa a síntese do navegador (mais robótica, mas grátis
+  // e instantânea). aoTerminar sempre é chamado no final, dos dois jeitos.
+  function falarTexto(txt, aoTerminar) {
+    const limpo = removerEmojis(txt);
+    const escolhida = localStorage.getItem(CHAVE_VOZ_ESCOLHIDA) || "";
+    pararFala();
+    if (escolhida.startsWith("google:")) {
+      sintetizarVoz(limpo, escolhida.slice(7))
+        .then(({ audioBase64 }) => {
+          const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
+          audioVozAtual = audio;
+          audio.onended = () => aoTerminar?.();
+          audio.onerror = () => aoTerminar?.();
+          audio.play().catch(() => aoTerminar?.());
+        })
+        .catch(() => aoTerminar?.());
+      return;
+    }
+    if (!("speechSynthesis" in window)) {
       aoTerminar?.();
       return;
     }
-    const u = new SpeechSynthesisUtterance(removerEmojis(txt));
+    const u = new SpeechSynthesisUtterance(limpo);
     u.lang = "pt-BR";
     u.rate = 1.0;
     u.pitch = 1.05;
     if (vozRef.current) u.voice = vozRef.current;
     u.onend = () => aoTerminar?.();
     u.onerror = () => aoTerminar?.();
-    window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
+  }
+
+  // Fala sob demanda (botão "Ouvir" em qualquer mensagem) — ignora o ttsOn,
+  // porque aqui é um pedido explícito, não a fala automática de resposta.
+  function ouvirTexto(txt) {
+    falarTexto(txt);
+  }
+
+  function falar(txt, aoTerminar) {
+    if (!ttsOn) {
+      aoTerminar?.();
+      return;
+    }
+    falarTexto(txt, aoTerminar);
   }
 
   async function enviar(conteudo) {
@@ -919,7 +950,10 @@ function PainelBackup({ fechar }) {
 /* ---------------- Voz da Bella ---------------- */
 function PainelVoz({ fechar }) {
   const [vozes, setVozes] = useState([]);
+  const [vozesGoogle, setVozesGoogle] = useState([]);
+  const [googleDisponivel, setGoogleDisponivel] = useState(false);
   const [escolhida, setEscolhida] = useState(() => localStorage.getItem(CHAVE_VOZ_ESCOLHIDA) || "");
+  const [testando, setTestando] = useState("");
 
   useEffect(() => {
     if (!("speechSynthesis" in window)) return;
@@ -933,12 +967,21 @@ function PainelVoz({ fechar }) {
     return () => window.speechSynthesis.removeEventListener("voiceschanged", atualizar);
   }, []);
 
-  function escolher(nome) {
-    setEscolhida(nome);
-    localStorage.setItem(CHAVE_VOZ_ESCOLHIDA, nome);
+  useEffect(() => {
+    vozStatus()
+      .then((s) => {
+        setGoogleDisponivel(s.disponivel);
+        setVozesGoogle(s.vozes || []);
+      })
+      .catch(() => {});
+  }, []);
+
+  function escolher(id) {
+    setEscolhida(id);
+    localStorage.setItem(CHAVE_VOZ_ESCOLHIDA, id);
   }
 
-  function testar(nome) {
+  function testarNavegador(nome) {
     if (!("speechSynthesis" in window)) return;
     const voz = vozes.find((v) => v.name === nome);
     const u = new SpeechSynthesisUtterance("Oi, doutor! Essa é a minha voz.");
@@ -946,6 +989,20 @@ function PainelVoz({ fechar }) {
     if (voz) u.voice = voz;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
+  }
+
+  async function testarGoogle(id) {
+    setTestando(id);
+    try {
+      const { audioBase64 } = await sintetizarVoz("Oi, doutor! Essa é a minha voz.", id);
+      const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
+      audio.onended = () => setTestando("");
+      audio.onerror = () => setTestando("");
+      audio.play();
+    } catch {
+      setTestando("");
+      alert("Não consegui testar essa voz agora.");
+    }
   }
 
   return (
@@ -960,6 +1017,28 @@ function PainelVoz({ fechar }) {
 
         <p className="dica">Escolha a voz que a Bella vai usar para falar com você.</p>
 
+        {googleDisponivel && (
+          <>
+            <div className="categoria-titulo">✨ Vozes naturais (Google)</div>
+            <div className="lista-vozes">
+              {vozesGoogle.map((v) => {
+                const id = `google:${v.id}`;
+                return (
+                  <div key={id} className={"voz-opcao" + (escolhida === id ? " sel" : "")}>
+                    <button className="voz-nome" onClick={() => escolher(id)}>
+                      {escolhida === id ? "●" : "○"} {v.nome}
+                    </button>
+                    <button className="voz-testar" onClick={() => testarGoogle(v.id)} title="Ouvir esta voz">
+                      {testando === v.id ? "…" : "▶"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        <div className="categoria-titulo">🔊 Vozes do navegador (grátis, mais robóticas)</div>
         {vozes.length === 0 ? (
           <p className="dica">
             Seu navegador não encontrou vozes em português ainda. Tente abrir de novo, ou
@@ -972,7 +1051,7 @@ function PainelVoz({ fechar }) {
                 <button className="voz-nome" onClick={() => escolher(v.name)}>
                   {escolhida === v.name ? "●" : "○"} {v.name}
                 </button>
-                <button className="voz-testar" onClick={() => testar(v.name)} title="Ouvir esta voz">
+                <button className="voz-testar" onClick={() => testarNavegador(v.name)} title="Ouvir esta voz">
                   ▶
                 </button>
               </div>

@@ -12,6 +12,7 @@ import contasRouter from "./routes/contas.js";
 import backupRouter from "./routes/backup.js";
 import documentosRouter from "./routes/documentos.js";
 import memoriasRouter from "./routes/memorias.js";
+import vozRouter from "./routes/voz.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,6 +29,7 @@ app.use("/api/contas", contasRouter);
 app.use("/api/backup", backupRouter);
 app.use("/api/documentos", documentosRouter);
 app.use("/api/memorias", memoriasRouter);
+app.use("/api/voz", vozRouter);
 
 // Em produção, o backend também serve o frontend já compilado (mesmo servidor).
 const frontendDist = path.join(__dirname, "../../frontend/dist");

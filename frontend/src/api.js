@@ -114,3 +114,12 @@ export const backupInfo = () => fetch("/api/backup/info").then(json);
 /* ---------------- Memória de longo prazo ---------------- */
 export const listarMemorias = () => fetch("/api/memorias").then(json);
 export const apagarMemoria = (id) => fetch(`/api/memorias/${id}`, { method: "DELETE" }).then(json);
+
+/* ---------------- Voz natural (Google Cloud TTS) ---------------- */
+export const vozStatus = () => fetch("/api/voz/vozes").then(json);
+export const sintetizarVoz = (texto, voz) =>
+  fetch("/api/voz/sintetizar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ texto, voz }),
+  }).then(json);

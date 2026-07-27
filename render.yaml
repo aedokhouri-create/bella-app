@@ -26,3 +26,5 @@ services:
         sync: false
       - key: CMOT_SENHA
         sync: false
+      - key: GOOGLE_TTS_API_KEY
+        sync: false
