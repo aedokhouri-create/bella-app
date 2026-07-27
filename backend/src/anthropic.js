@@ -7,9 +7,13 @@ import { criarTarefa, criarConta, buscarContatos } from "./db.js";
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
 
 // Cliente criado sob demanda para dar uma mensagem clara se faltar a chave.
+// A chave é "limpa" de qualquer caractere fora do ASCII visível (espaços, quebras
+// de linha ou caracteres estranhos que às vezes entram ao colar em painéis como o
+// do Render) — headers HTTP não aceitam caracteres fora da faixa 0-255.
 function getClient() {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-  return new Anthropic(); // lê ANTHROPIC_API_KEY do ambiente
+  const chave = process.env.ANTHROPIC_API_KEY?.replace(/[^\x21-\x7E]/g, "");
+  if (!chave) return null;
+  return new Anthropic({ apiKey: chave });
 }
 
 const ferramentaCriarTarefa = {
