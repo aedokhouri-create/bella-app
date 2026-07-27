@@ -7,9 +7,15 @@ const CMOT_URL = process.env.CMOT_BASE_URL || "https://cmot-app.onrender.com";
 let tokenCache = null;
 let medicoIdCache = null;
 
+// Mesma limpeza defensiva do ANTHROPIC_API_KEY — painéis como o do Render às
+// vezes inserem um caractere fora do ASCII ao colar em campos de variável.
+function limpar(valor) {
+  return valor?.replace(/[^\x21-\x7E]/g, "").trim();
+}
+
 async function login() {
-  const email = process.env.CMOT_EMAIL;
-  const senha = process.env.CMOT_SENHA;
+  const email = limpar(process.env.CMOT_EMAIL);
+  const senha = limpar(process.env.CMOT_SENHA);
   if (!email || !senha) {
     throw new Error("CMOT_EMAIL/CMOT_SENHA não configurados no .env do backend da Bella.");
   }
