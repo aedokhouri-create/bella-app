@@ -1031,7 +1031,7 @@ function PainelBackup({ fechar }) {
               {calStatus.apple ? "conectado" : "não conectado"}
             </li>
             <li>
-              {calStatus.google ? "🟢" : "⚪️"} Google Calendar — {calStatus.google ? "conectado" : "não conectado (em breve)"}
+              {calStatus.google ? "🟢" : "⚪️"} Google Calendar — {calStatus.google ? "conectado" : "não conectado"}
             </li>
           </ul>
         ) : (
@@ -1042,6 +1042,14 @@ function PainelBackup({ fechar }) {
             Quando você gerar a senha de app do seu Apple ID e eu configurar no servidor, toda
             tarefa e conta com data passa a aparecer sozinha no Calendário do iPhone.
           </p>
+        )}
+        {calStatus && calStatus.googleConfigurado && !calStatus.google && (
+          <a className="btn-principal btn-baixar" href="/api/calendario/google/conectar">
+            🔗 Conectar Google Calendar
+          </a>
+        )}
+        {calStatus && !calStatus.googleConfigurado && (
+          <p className="dica">Google Calendar ainda não foi configurado no servidor.</p>
         )}
       </div>
     </div>

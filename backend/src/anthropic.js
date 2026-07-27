@@ -13,7 +13,7 @@ import {
 } from "./db.js";
 import { gerarDocumentoDocx } from "./documentos.js";
 import { cadastrarCirurgiaNoCmot } from "./cmot.js";
-import { sincronizarTarefaApple, sincronizarContaApple } from "./calendarioSync.js";
+import { sincronizarTarefaApple, sincronizarContaApple, sincronizarTarefaGoogle, sincronizarContaGoogle } from "./calendarioSync.js";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
 
@@ -492,6 +492,7 @@ export async function conversar({ message, history, imagem }) {
         const tarefa = criarTarefa(bloco.input);
         tarefasCriadas.push(tarefa);
         sincronizarTarefaApple(tarefa);
+        sincronizarTarefaGoogle(tarefa);
         toolResults.push({
           type: "tool_result",
           tool_use_id: bloco.id,
@@ -501,6 +502,7 @@ export async function conversar({ message, history, imagem }) {
         const conta = criarConta(bloco.input);
         contasCriadas.push(conta);
         sincronizarContaApple(conta);
+        sincronizarContaGoogle(conta);
         toolResults.push({
           type: "tool_result",
           tool_use_id: bloco.id,

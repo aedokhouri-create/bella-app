@@ -1,7 +1,7 @@
 // Rotas de contas a pagar.
 import { Router } from "express";
 import { listarContas, criarConta, atualizarConta, apagarConta, buscarConta } from "../db.js";
-import { sincronizarContaApple, removerContaApple } from "../calendarioSync.js";
+import { sincronizarContaApple, removerContaApple, sincronizarContaGoogle, removerContaGoogle } from "../calendarioSync.js";
 
 const router = Router();
 
@@ -16,6 +16,7 @@ router.post("/", (req, res) => {
   const conta = criarConta(req.body);
   res.status(201).json(conta);
   sincronizarContaApple(conta);
+  sincronizarContaGoogle(conta);
 });
 
 router.patch("/:id", (req, res) => {
@@ -23,6 +24,7 @@ router.patch("/:id", (req, res) => {
   if (!conta) return res.status(404).json({ erro: "Conta não encontrada." });
   res.json(conta);
   sincronizarContaApple(conta);
+  sincronizarContaGoogle(conta);
 });
 
 router.delete("/:id", (req, res) => {
@@ -31,6 +33,7 @@ router.delete("/:id", (req, res) => {
   apagarConta(id);
   res.status(204).end();
   removerContaApple(conta);
+  removerContaGoogle(conta);
 });
 
 export default router;

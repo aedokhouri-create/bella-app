@@ -36,3 +36,9 @@ services:
         sync: false
       - key: APPLE_APP_PASSWORD
         sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        value: https://bella-app-cp0x.onrender.com/api/calendario/google/callback

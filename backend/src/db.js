@@ -251,6 +251,10 @@ export function salvarSyncAppleTarefa(id, uid, url) {
   db.prepare("UPDATE tarefas SET cal_apple_uid = ?, cal_apple_url = ? WHERE id = ?").run(uid, url, id);
 }
 
+export function salvarSyncGoogleTarefa(id, googleId) {
+  db.prepare("UPDATE tarefas SET cal_google_id = ? WHERE id = ?").run(googleId, id);
+}
+
 /* ---------------- Contatos (para enviar WhatsApp) ---------------- */
 export function listarContatos() {
   return db.prepare("SELECT * FROM contatos ORDER BY nome COLLATE NOCASE").all();
@@ -327,6 +331,10 @@ export function apagarConta(id) {
 
 export function salvarSyncAppleConta(id, uid, url) {
   db.prepare("UPDATE contas_pagar SET cal_apple_uid = ?, cal_apple_url = ? WHERE id = ?").run(uid, url, id);
+}
+
+export function salvarSyncGoogleConta(id, googleId) {
+  db.prepare("UPDATE contas_pagar SET cal_google_id = ? WHERE id = ?").run(googleId, id);
 }
 
 export default db;

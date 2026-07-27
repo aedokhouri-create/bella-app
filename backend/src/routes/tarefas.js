@@ -1,7 +1,7 @@
 // Rotas de tarefas (listar, criar, editar, apagar).
 import { Router } from "express";
 import { listarTarefas, criarTarefa, atualizarTarefa, apagarTarefa, buscarTarefa } from "../db.js";
-import { sincronizarTarefaApple, removerTarefaApple } from "../calendarioSync.js";
+import { sincronizarTarefaApple, removerTarefaApple, sincronizarTarefaGoogle, removerTarefaGoogle } from "../calendarioSync.js";
 
 const router = Router();
 
@@ -17,6 +17,7 @@ router.post("/", (req, res) => {
   const tarefa = criarTarefa(req.body);
   res.status(201).json(tarefa);
   sincronizarTarefaApple(tarefa);
+  sincronizarTarefaGoogle(tarefa);
 });
 
 router.patch("/:id", (req, res) => {
@@ -24,6 +25,7 @@ router.patch("/:id", (req, res) => {
   if (!tarefa) return res.status(404).json({ erro: "Tarefa não encontrada." });
   res.json(tarefa);
   sincronizarTarefaApple(tarefa);
+  sincronizarTarefaGoogle(tarefa);
 });
 
 router.delete("/:id", (req, res) => {
@@ -32,6 +34,7 @@ router.delete("/:id", (req, res) => {
   apagarTarefa(id);
   res.status(204).end();
   removerTarefaApple(tarefa);
+  removerTarefaGoogle(tarefa);
 });
 
 export default router;
