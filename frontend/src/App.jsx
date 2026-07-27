@@ -12,6 +12,10 @@ import {
   cofreListarNotas,
   cofreCriarNota,
   cofreApagarNota,
+  cofreListarArquivos,
+  cofreAnexarArquivo,
+  cofreBaixarArquivo,
+  cofreApagarArquivo,
   listarContatos,
   criarContato,
   apagarContato,
@@ -137,8 +141,13 @@ export default function App() {
           </button>
           <button
             className={"audio " + (ttsOn ? "on" : "")}
-            onClick={() => setTtsOn((v) => !v)}
-            title="Ligar/desligar a voz da assistente"
+            onClick={() => {
+              // Sempre interrompe uma fala em andamento na hora, além de alternar
+              // se as próximas respostas devem falar sozinhas ou não.
+              window.speechSynthesis?.cancel();
+              setTtsOn((v) => !v);
+            }}
+            title="Ligar/desligar a voz da assistente (toque pra parar de falar agora)"
           >
             {ttsOn ? "🔊" : "🔇"}
           </button>
@@ -224,6 +233,19 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
     modoConversaRef.current = modoConversa;
   }, [modoConversa]);
 
+  // Fala sob demanda (botão "Ouvir" em qualquer mensagem) — ignora o ttsOn,
+  // porque aqui é um pedido explícito, não a fala automática de resposta.
+  function ouvirTexto(txt) {
+    if (!("speechSynthesis" in window)) return;
+    const u = new SpeechSynthesisUtterance(txt);
+    u.lang = "pt-BR";
+    u.rate = 1.0;
+    u.pitch = 1.05;
+    if (vozRef.current) u.voice = vozRef.current;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  }
+
   function falar(txt, aoTerminar) {
     if (!ttsOn || !("speechSynthesis" in window)) {
       aoTerminar?.();
@@ -302,10 +324,37 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
     r.lang = "pt-BR";
     r.interimResults = false;
     r.maxAlternatives = 1;
+    let recebeuResultado = false;
     r.onstart = () => setOuvindo(true);
-    r.onend = () => setOuvindo(false);
-    r.onerror = () => setOuvindo(false);
+    r.onend = () => {
+      setOuvindo(false);
+      // Alguns navegadores (iOS Safari) encerram sem soltar erro nem resultado
+      // quando não conseguem captar nada — avisa em vez de ficar em silêncio.
+      if (!recebeuResultado) {
+        setMensagens((m) => [
+          ...m,
+          {
+            role: "assistant",
+            text: "Não consegui ouvir nada. Confira se deu permissão de microfone pro Safari (Ajustes → Safari → Microfone) e tenta de novo, falando logo que tocar no microfone.",
+          },
+        ]);
+      }
+    };
+    r.onerror = (e) => {
+      setOuvindo(false);
+      const motivos = {
+        "not-allowed": "Preciso de permissão pra usar o microfone. Vai em Ajustes → Safari → Microfone e libera pro site da Bella.",
+        "no-speech": "Não peguei nenhuma fala. Tenta de novo falando logo depois de tocar no microfone.",
+        "audio-capture": "Não encontrei um microfone disponível.",
+        network: "Deu erro de conexão no ditado por voz. Confira sua internet e tenta de novo.",
+      };
+      setMensagens((m) => [
+        ...m,
+        { role: "assistant", text: motivos[e.error] || `Não consegui usar o microfone agora (${e.error}). Tenta de novo.` },
+      ]);
+    };
     r.onresult = (e) => {
+      recebeuResultado = true;
       const t = e.results[0][0].transcript;
       enviar(t);
     };
@@ -354,6 +403,11 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
           <div key={i} className={"balao " + m.role}>
             {m.foto && <img className="foto-msg" src={m.foto} alt="Foto enviada" />}
             <div className="txt">{m.text}</div>
+            {m.role === "assistant" && m.text && (
+              <button type="button" className="btn-ouvir" onClick={() => ouvirTexto(m.text)} title="Ouvir esta mensagem">
+                🔊 Ouvir
+              </button>
+            )}
             {m.tarefas?.map((t) => (
               <div key={"t" + t.id} className="chip-tarefa">
                 ✅ {t.titulo}
@@ -414,7 +468,7 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
           type="button"
           className="camera"
           onClick={() => fotoInputRef.current?.click()}
-          title="Enviar foto para a Bella ler"
+          title="Tirar foto ou escolher uma foto salva (ex.: recebida no WhatsApp) para a Bella ler"
           disabled={ocupado}
         >
           📷
@@ -423,7 +477,6 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
           ref={fotoInputRef}
           type="file"
           accept="image/*"
-          capture="environment"
           style={{ display: "none" }}
           onChange={enviarFoto}
         />
@@ -909,6 +962,8 @@ function Cofre() {
   const [novoConteudo, setNovoConteudo] = useState("");
   const [novaCategoria, setNovaCategoria] = useState("");
   const [busca, setBusca] = useState("");
+  const [categoriaAberta, setCategoriaAberta] = useState(null); // null = grade de pastas
+  const [mostrarForm, setMostrarForm] = useState(false);
 
   useEffect(() => {
     cofreStatus()
@@ -969,7 +1024,21 @@ function Cofre() {
     setNotas((n) => [nota, ...n]);
     setNovoTitulo("");
     setNovoConteudo("");
+    setNovaCategoria(categoriaAberta && categoriaAberta !== "Outros" ? categoriaAberta : "");
+    setMostrarForm(false);
+  }
+
+  function abrirCategoria(cat) {
+    setCategoriaAberta(cat);
+    setNovaCategoria(cat === "Outros" ? "" : cat);
+    setMostrarForm(false);
+    setBusca("");
+  }
+
+  function voltarPastas() {
+    setCategoriaAberta(null);
     setNovaCategoria("");
+    setMostrarForm(false);
   }
 
   async function removerNota(id) {
@@ -1024,9 +1093,10 @@ function Cofre() {
     navigator.clipboard?.writeText(txt);
   }
 
-  // aberto — agrupa por categoria (com busca)
+  // Busca sempre olha tudo, independente da pasta aberta — escape hatch rápido.
+  const buscaAtiva = busca.trim().length > 0;
   const filtradas = notas.filter((n) => {
-    if (!busca.trim()) return true;
+    if (!buscaAtiva) return true;
     const q = busca.toLowerCase();
     return (
       (n.titulo || "").toLowerCase().includes(q) ||
@@ -1034,80 +1104,227 @@ function Cofre() {
       (n.conteudo || "").toLowerCase().includes(q)
     );
   });
-  const grupos = {};
-  for (const n of filtradas) {
+
+  const contagemPorCategoria = {};
+  for (const n of notas) {
     const c = n.categoria || "Outros";
-    (grupos[c] ||= []).push(n);
+    contagemPorCategoria[c] = (contagemPorCategoria[c] || 0) + 1;
   }
-  const ordem = [...CATEGORIAS_COFRE, "Outros"];
-  const chaves = Object.keys(grupos).sort((a, b) => {
-    const ia = ordem.indexOf(a), ib = ordem.indexOf(b);
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-  });
+  const pastas = [...CATEGORIAS_COFRE, ...(contagemPorCategoria["Outros"] ? ["Outros"] : [])];
+
+  const notasDaPastaAberta = categoriaAberta
+    ? notas.filter((n) => (n.categoria || "Outros") === categoriaAberta)
+    : [];
+
+  function separarIconeNome(cat) {
+    const espaco = cat.indexOf(" ");
+    return espaco === -1 ? { icone: "📁", nome: cat } : { icone: cat.slice(0, espaco), nome: cat.slice(espaco + 1) };
+  }
+
+  const formNota = (
+    <form className="form-nota" onSubmit={adicionarNota}>
+      <input
+        placeholder="Título (ex.: Banco do Brasil)"
+        value={novoTitulo}
+        onChange={(e) => setNovoTitulo(e.target.value)}
+        autoFocus
+      />
+      <textarea
+        placeholder="Login / senha / detalhes"
+        value={novoConteudo}
+        onChange={(e) => setNovoConteudo(e.target.value)}
+        rows={2}
+      />
+      <select value={novaCategoria} onChange={(e) => setNovaCategoria(e.target.value)}>
+        <option value="">Sem categoria</option>
+        {CATEGORIAS_COFRE.map((c) => (
+          <option key={c} value={c}>{c}</option>
+        ))}
+      </select>
+      <button type="submit" className="btn-principal" disabled={!novoTitulo.trim()}>
+        + Guardar
+      </button>
+    </form>
+  );
+
+  function cartaoNota(n) {
+    return (
+      <div key={n.id} className="nota-bloco">
+        <div className="nota">
+          <div className="nota-corpo">
+            <div className="titulo">{n.titulo}</div>
+            {n.conteudo && <div className="desc">{n.conteudo}</div>}
+          </div>
+          <div className="nota-acoes">
+            <button className="copiar" onClick={() => copiar(n)} title="Copiar">📋</button>
+            <button className="apagar" onClick={() => removerNota(n.id)} title="Apagar">🗑</button>
+          </div>
+        </div>
+        <ArquivosNota pin={pin} nota={n} />
+      </div>
+    );
+  }
 
   return (
     <div className="cofre-aberto">
       <div className="cofre-topo">
-        <span>🔓 Cofre aberto</span>
+        {categoriaAberta && !buscaAtiva ? (
+          <button className="voltar-pastas" onClick={voltarPastas}>‹ Pastas</button>
+        ) : (
+          <span>🔓 Cofre aberto</span>
+        )}
         <button className="trancar" onClick={trancar}>
           Trancar
         </button>
       </div>
-      <form className="form-nota" onSubmit={adicionarNota}>
-        <input
-          placeholder="Título (ex.: Banco do Brasil)"
-          value={novoTitulo}
-          onChange={(e) => setNovoTitulo(e.target.value)}
-        />
-        <textarea
-          placeholder="Login / senha / detalhes"
-          value={novoConteudo}
-          onChange={(e) => setNovoConteudo(e.target.value)}
-          rows={2}
-        />
-        <select value={novaCategoria} onChange={(e) => setNovaCategoria(e.target.value)}>
-          <option value="">Sem categoria</option>
-          {CATEGORIAS_COFRE.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <button type="submit" className="btn-principal" disabled={!novoTitulo.trim()}>
-          + Guardar
-        </button>
-      </form>
 
-      {notas.length > 0 && (
-        <input
-          className="busca-cofre"
-          placeholder="🔎 Buscar (ex.: banco, hospital, gov)"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-        />
-      )}
+      <input
+        className="busca-cofre"
+        placeholder="🔎 Buscar em tudo (ex.: banco, hospital, gov)"
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+      />
 
-      {notas.length === 0 ? (
-        <div className="vazio"><p className="dica">Nenhuma nota guardada ainda.</p></div>
-      ) : (
+      {buscaAtiva ? (
         <div className="notas">
-          {chaves.map((cat) => (
-            <div key={cat} className="grupo">
-              <div className="grupo-titulo">
-                {cat} <span className="conta">{grupos[cat].length}</span>
+          {filtradas.length === 0 ? (
+            <div className="vazio"><p className="dica">Nada encontrado.</p></div>
+          ) : (
+            filtradas.map((n) => cartaoNota(n))
+          )}
+        </div>
+      ) : categoriaAberta === null ? (
+        <>
+          <button type="button" className="btn-nova-nota" onClick={() => setMostrarForm((v) => !v)}>
+            {mostrarForm ? "Cancelar" : "+ Nova nota"}
+          </button>
+          {mostrarForm && formNota}
+          {notas.length === 0 && !mostrarForm ? (
+            <div className="vazio"><p className="dica">Nenhuma nota guardada ainda.</p></div>
+          ) : (
+            <div className="pastas-grade">
+              {pastas.map((cat) => {
+                const { icone, nome } = separarIconeNome(cat);
+                return (
+                  <button key={cat} className="pasta" onClick={() => abrirCategoria(cat)}>
+                    <span className="pasta-icone">{icone}</span>
+                    <span className="pasta-nome">{nome}</span>
+                    <span className="pasta-conta">{contagemPorCategoria[cat] || 0}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="categoria-titulo">{separarIconeNome(categoriaAberta).icone} {separarIconeNome(categoriaAberta).nome}</div>
+          <button type="button" className="btn-nova-nota" onClick={() => setMostrarForm((v) => !v)}>
+            {mostrarForm ? "Cancelar" : "+ Nova nota aqui"}
+          </button>
+          {mostrarForm && formNota}
+          {notasDaPastaAberta.length === 0 ? (
+            <div className="vazio"><p className="dica">Nenhuma nota nesta pasta ainda.</p></div>
+          ) : (
+            <div className="notas">{notasDaPastaAberta.map((n) => cartaoNota(n))}</div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ArquivosNota({ pin, nota }) {
+  const [aberto, setAberto] = useState(false);
+  const [arquivos, setArquivos] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const fileRef = useRef(null);
+
+  async function carregar() {
+    setCarregando(true);
+    try {
+      setArquivos(await cofreListarArquivos(pin, nota.id));
+    } catch {
+      /* ignora — tenta de novo na próxima abertura */
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  function alternar() {
+    const novo = !aberto;
+    setAberto(novo);
+    if (novo) carregar();
+  }
+
+  async function anexar(e) {
+    const arquivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!arquivo) return;
+    setEnviando(true);
+    try {
+      const leitor = new FileReader();
+      const base64 = await new Promise((resolve, reject) => {
+        leitor.onerror = () => reject(new Error("Não consegui ler o arquivo."));
+        leitor.onload = () => resolve(leitor.result.split(",")[1]);
+        leitor.readAsDataURL(arquivo);
+      });
+      const novo = await cofreAnexarArquivo(pin, nota.id, {
+        nomeOriginal: arquivo.name,
+        tipoMime: arquivo.type,
+        base64,
+      });
+      setArquivos((a) => [...a, novo]);
+    } catch {
+      alert("Não consegui anexar esse arquivo. Tenta de novo.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function baixar(arquivoId) {
+    const { base64, tipoMime, nomeOriginal } = await cofreBaixarArquivo(pin, nota.id, arquivoId);
+    const link = document.createElement("a");
+    link.href = `data:${tipoMime || "application/octet-stream"};base64,${base64}`;
+    link.download = nomeOriginal || "arquivo";
+    link.click();
+  }
+
+  async function apagar(arquivoId) {
+    if (!confirm("Apagar este arquivo?")) return;
+    setArquivos((a) => a.filter((x) => x.id !== arquivoId));
+    await cofreApagarArquivo(pin, nota.id, arquivoId).catch(() => {});
+  }
+
+  return (
+    <div className="arquivos-nota">
+      <button type="button" className="arquivos-toggle" onClick={alternar}>
+        📎 {aberto ? "Ocultar arquivos" : "Ver/anexar arquivos"}
+      </button>
+      {aberto && (
+        <div className="arquivos-lista">
+          {carregando && <p className="dica">Carregando…</p>}
+          {!carregando && arquivos.length === 0 && <p className="dica">Nenhum arquivo anexado ainda.</p>}
+          {arquivos.map((a) => (
+            <div key={a.id} className="arquivo-item">
+              <span>📄 {a.nome_original || "arquivo"}</span>
+              <div className="arquivo-acoes">
+                <button type="button" onClick={() => baixar(a.id)} title="Baixar">⬇️</button>
+                <button type="button" onClick={() => apagar(a.id)} title="Apagar">🗑</button>
               </div>
-              {grupos[cat].map((n) => (
-                <div key={n.id} className="nota">
-                  <div className="nota-corpo">
-                    <div className="titulo">{n.titulo}</div>
-                    {n.conteudo && <div className="desc">{n.conteudo}</div>}
-                  </div>
-                  <div className="nota-acoes">
-                    <button className="copiar" onClick={() => copiar(n)} title="Copiar">📋</button>
-                    <button className="apagar" onClick={() => removerNota(n.id)} title="Apagar">🗑</button>
-                  </div>
-                </div>
-              ))}
             </div>
           ))}
+          <button type="button" className="anexar-btn" onClick={() => fileRef.current?.click()} disabled={enviando}>
+            {enviando ? "Enviando…" : "+ Anexar foto/arquivo"}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,.pdf"
+            style={{ display: "none" }}
+            onChange={anexar}
+          />
         </div>
       )}
     </div>

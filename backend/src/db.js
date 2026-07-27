@@ -11,6 +11,7 @@ const dbPath = path.join(DATA_DIR, "nina.db");
 
 const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
+db.pragma("foreign_keys = ON"); // garante que apagar uma nota também apague seus arquivos
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS tarefas (
@@ -53,6 +54,15 @@ db.exec(`
     vencimento TEXT NOT NULL,   -- YYYY-MM-DD
     categoria TEXT,             -- moradia, cartao, saude, imposto...
     status TEXT DEFAULT 'pendente',  -- pendente | pago
+    criado_em TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS cofre_arquivos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nota_id INTEGER NOT NULL REFERENCES notas_secretas(id) ON DELETE CASCADE,
+    nome_original TEXT,
+    tipo_mime TEXT,
+    dados TEXT NOT NULL,        -- base64 do arquivo, criptografado (mesma chave da nota)
     criado_em TEXT DEFAULT (datetime('now'))
   );
 `);
@@ -104,6 +114,35 @@ export function atualizarNota(id, campos) {
 }
 export function apagarNota(id) {
   db.prepare("DELETE FROM notas_secretas WHERE id = ?").run(id);
+}
+
+/* ---------------- Arquivos anexados às notas do cofre ---------------- */
+export function listarArquivosNota(notaId) {
+  return db
+    .prepare("SELECT id, nota_id, nome_original, tipo_mime, criado_em FROM cofre_arquivos WHERE nota_id = ? ORDER BY id")
+    .all(notaId);
+}
+// Igual à anterior, mas inclui o campo "dados" (criptografado) — só para uso
+// interno na troca de PIN (recriptografar), nunca exposto por rota de listagem.
+export function listarTodosArquivosComDados() {
+  return db.prepare("SELECT * FROM cofre_arquivos").all();
+}
+export function atualizarDadosArquivo(id, dados) {
+  db.prepare("UPDATE cofre_arquivos SET dados = ? WHERE id = ?").run(dados, id);
+}
+export function criarArquivoNota({ notaId, nomeOriginal, tipoMime, dados }) {
+  const info = db
+    .prepare("INSERT INTO cofre_arquivos (nota_id, nome_original, tipo_mime, dados) VALUES (?, ?, ?, ?)")
+    .run(notaId, nomeOriginal || null, tipoMime || null, dados);
+  return db
+    .prepare("SELECT id, nota_id, nome_original, tipo_mime, criado_em FROM cofre_arquivos WHERE id = ?")
+    .get(info.lastInsertRowid);
+}
+export function buscarArquivo(id) {
+  return db.prepare("SELECT * FROM cofre_arquivos WHERE id = ?").get(id);
+}
+export function apagarArquivo(id) {
+  db.prepare("DELETE FROM cofre_arquivos WHERE id = ?").run(id);
 }
 
 export function listarTarefas() {

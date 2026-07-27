@@ -9,7 +9,20 @@
 //   e recriptografadas com o novo, na hora, sem perder nada.
 import { Router } from "express";
 import crypto from "node:crypto";
-import { getConfig, setConfig, listarNotas, criarNota, atualizarNota, apagarNota } from "../db.js";
+import {
+  getConfig,
+  setConfig,
+  listarNotas,
+  criarNota,
+  atualizarNota,
+  apagarNota,
+  listarArquivosNota,
+  criarArquivoNota,
+  buscarArquivo,
+  apagarArquivo,
+  listarTodosArquivosComDados,
+  atualizarDadosArquivo,
+} from "../db.js";
 import { derivarChave, criptografar, descriptografar, estaCriptografado } from "../crypto.js";
 
 const router = Router();
@@ -79,6 +92,10 @@ router.post("/definir", (req, res) => {
         conteudo: criptografar(chaveNova, conteudoClaro),
       });
     }
+    for (const a of listarTodosArquivosComDados()) {
+      const dadosClaros = estaCriptografado(a.dados) ? descriptografar(chaveAntiga, a.dados) : a.dados;
+      atualizarDadosArquivo(a.id, criptografar(chaveNova, dadosClaros));
+    }
     setConfig(CHAVE_PIN, `${novoSalt}:${hashVerificacao(pin, novoSalt)}`);
   } else {
     // Primeira vez: cria o PIN e criptografa qualquer nota que já exista
@@ -136,6 +153,43 @@ router.post("/notas", exigePin, (req, res) => {
 
 router.delete("/notas/:id", exigePin, (req, res) => {
   apagarNota(Number(req.params.id));
+  res.status(204).end();
+});
+
+// Arquivos anexados a uma nota (fotos de apólice, documentos etc.) — mesma
+// criptografia das senhas, sem PIN certo ninguém abre.
+router.get("/notas/:id/arquivos", exigePin, (req, res) => {
+  res.json(listarArquivosNota(Number(req.params.id)));
+});
+
+router.post("/notas/:id/arquivos", exigePin, (req, res) => {
+  const { nomeOriginal, tipoMime, base64 } = req.body || {};
+  if (!base64) return res.status(400).json({ erro: "Arquivo vazio." });
+  const chave = chaveAtual(req.cofrePin);
+  const arquivo = criarArquivoNota({
+    notaId: Number(req.params.id),
+    nomeOriginal,
+    tipoMime,
+    dados: criptografar(chave, base64),
+  });
+  res.status(201).json(arquivo);
+});
+
+router.get("/notas/:id/arquivos/:arquivoId/conteudo", exigePin, (req, res) => {
+  const arquivo = buscarArquivo(Number(req.params.arquivoId));
+  if (!arquivo || arquivo.nota_id !== Number(req.params.id)) {
+    return res.status(404).json({ erro: "Arquivo não encontrado." });
+  }
+  const chave = chaveAtual(req.cofrePin);
+  res.json({
+    nomeOriginal: arquivo.nome_original,
+    tipoMime: arquivo.tipo_mime,
+    base64: descriptografar(chave, arquivo.dados),
+  });
+});
+
+router.delete("/notas/:id/arquivos/:arquivoId", exigePin, (req, res) => {
+  apagarArquivo(Number(req.params.arquivoId));
   res.status(204).end();
 });
 

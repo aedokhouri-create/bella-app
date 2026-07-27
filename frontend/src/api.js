@@ -59,6 +59,24 @@ export const cofreCriarNota = (pin, nota) =>
 export const cofreApagarNota = (pin, id) =>
   fetch(`/api/cofre/notas/${id}`, { method: "DELETE", headers: { "x-cofre-pin": pin } }).then(json);
 
+export const cofreListarArquivos = (pin, notaId) =>
+  fetch(`/api/cofre/notas/${notaId}/arquivos`, { headers: { "x-cofre-pin": pin } }).then(json);
+
+export const cofreAnexarArquivo = (pin, notaId, arquivo) =>
+  fetch(`/api/cofre/notas/${notaId}/arquivos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-cofre-pin": pin },
+    body: JSON.stringify(arquivo),
+  }).then(json);
+
+export const cofreBaixarArquivo = (pin, notaId, arquivoId) =>
+  fetch(`/api/cofre/notas/${notaId}/arquivos/${arquivoId}/conteudo`, { headers: { "x-cofre-pin": pin } }).then(json);
+
+export const cofreApagarArquivo = (pin, notaId, arquivoId) =>
+  fetch(`/api/cofre/notas/${notaId}/arquivos/${arquivoId}`, { method: "DELETE", headers: { "x-cofre-pin": pin } }).then(
+    json
+  );
+
 /* ---------------- Contatos (para WhatsApp) ---------------- */
 export const listarContatos = () => fetch("/api/contatos").then(json);
 
