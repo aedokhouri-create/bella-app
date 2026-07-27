@@ -105,6 +105,16 @@ function redimensionarImagem(file, maxLado = 1280, qualidade = 0.82) {
   });
 }
 
+// Lê um arquivo (ex.: PDF) como base64 puro, sem redimensionar — só faz sentido pra imagem.
+function lerArquivoBase64(file) {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onerror = () => reject(new Error("Não consegui ler o arquivo."));
+    leitor.onload = () => resolve({ base64: leitor.result.split(",")[1], mediaType: file.type || "application/pdf" });
+    leitor.readAsDataURL(file);
+  });
+}
+
 const CATEGORIAS_COFRE = [
   "🏥 Hospitais & Sistemas Médicos",
   "🏛️ Governo & Conselhos",
@@ -338,13 +348,21 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
 
   async function enviarFoto(e) {
     const arquivo = e.target.files?.[0];
-    e.target.value = ""; // permite escolher a mesma foto de novo depois
+    e.target.value = ""; // permite escolher o mesmo arquivo de novo depois
     if (!arquivo || ocupado) return;
+    const ehPdf = arquivo.type === "application/pdf";
     setOcupado(true);
     try {
-      const { base64, mediaType, preview } = await redimensionarImagem(arquivo);
+      const { base64, mediaType, preview } = ehPdf
+        ? { ...(await lerArquivoBase64(arquivo)), preview: null }
+        : await redimensionarImagem(arquivo);
       const historico = mensagens;
-      setMensagens((m) => [...m, { role: "user", text: "📷 Foto enviada", foto: preview }]);
+      setMensagens((m) => [
+        ...m,
+        ehPdf
+          ? { role: "user", text: `📄 Documento enviado: ${arquivo.name}` }
+          : { role: "user", text: "📷 Foto enviada", foto: preview },
+      ]);
       const { reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias, modelos } = await enviarMensagem("", historico, { base64, mediaType });
       setMensagens((m) => [...m, { role: "assistant", text: reply, tarefas, contas, acoesWhatsApp, documentos, cmot, memorias, modelos }]);
       falar(reply, () => {
@@ -355,7 +373,12 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
     } catch {
       setMensagens((m) => [
         ...m,
-        { role: "assistant", text: "Não consegui ler essa foto. Tente tirar de novo, com mais luz." },
+        {
+          role: "assistant",
+          text: ehPdf
+            ? "Não consegui ler esse documento. Tente de novo."
+            : "Não consegui ler essa foto. Tente tirar de novo, com mais luz.",
+        },
       ]);
     } finally {
       setOcupado(false);
@@ -539,7 +562,7 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
           type="button"
           className="camera"
           onClick={() => fotoInputRef.current?.click()}
-          title="Tirar foto ou escolher uma foto salva (ex.: recebida no WhatsApp) para a Bella ler"
+          title="Tirar foto, escolher uma foto ou PDF salvo (ex.: recebido no WhatsApp) para a Bella ler"
           disabled={ocupado}
         >
           📷
@@ -547,7 +570,7 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
         <input
           ref={fotoInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,.pdf"
           style={{ display: "none" }}
           onChange={enviarFoto}
         />

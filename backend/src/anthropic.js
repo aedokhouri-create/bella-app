@@ -435,7 +435,7 @@ const FERRAMENTAS = [
 ];
 
 // Recebe { message, history, imagem } e devolve { reply, tarefas, contas, acoesWhatsApp, documentos }.
-// imagem (opcional): { base64, mediaType } — uma foto tirada/enviada pelo usuário.
+// imagem (opcional): { base64, mediaType } — uma foto ou PDF enviado pelo usuário.
 export async function conversar({ message, history, imagem }) {
   const client = getClient();
   if (!client) {
@@ -455,8 +455,10 @@ export async function conversar({ message, history, imagem }) {
 
   const conteudoUsuario = imagem
     ? [
-        { type: "image", source: { type: "base64", media_type: imagem.mediaType, data: imagem.base64 } },
-        { type: "text", text: message || "Aqui está a foto." },
+        imagem.mediaType === "application/pdf"
+          ? { type: "document", source: { type: "base64", media_type: imagem.mediaType, data: imagem.base64 } }
+          : { type: "image", source: { type: "base64", media_type: imagem.mediaType, data: imagem.base64 } },
+        { type: "text", text: message || (imagem.mediaType === "application/pdf" ? "Aqui está o documento." : "Aqui está a foto.") },
       ]
     : message;
 
