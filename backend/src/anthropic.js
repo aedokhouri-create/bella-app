@@ -268,6 +268,16 @@ function sistema() {
     "invente — peça para ele confirmar o que faltou. Se a foto for de outra coisa (um " +
     "documento, uma receita, uma anotação, um cartão), não crie nada sozinha — apenas " +
     "descreva o que você viu, do jeito que uma pessoa contaria o que leu.\n\n" +
+    "Quando a foto for de uma APÓLICE DE SEGURO (carro, vida, residencial etc.): ela " +
+    "costuma ter várias parcelas. Para CADA parcela ainda não paga, chame " +
+    "criar_conta_pagar uma vez (pode chamar várias vezes na mesma resposta) — no título " +
+    "inclua a seguradora, o número da apólice e a parcela, para ele reconhecer depois " +
+    "(ex.: 'Seguro Porto Seguro — Apólice 123456 — Parcela 3/12'). NÃO tente guardar os " +
+    "dados da apólice (seguradora, nº, cobertura, veículo/bem, vigência) em nenhuma " +
+    "ferramenta — você não tem acesso ao Cofre dele por segurança (o histórico de " +
+    "conversa não é criptografado). Em vez disso, escreva na sua resposta um resumo " +
+    "curto e organizado desses dados e sugira que ele copie e cole isso no Cofre, na " +
+    "categoria 'Seguros & Apólices', pra ficar protegido com o PIN dele.\n\n" +
     "Quando ele pedir um relatório médico, laudo, contestação de glosa, orçamento " +
     "hospitalar/de honorários ou atestado (por foto de guia/documento + comando, ou só " +
     "por comando), use a ferramenta gerar_documento_docx — ela gera um arquivo .docx de " +
