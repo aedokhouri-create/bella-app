@@ -1105,6 +1105,13 @@ function PainelBackup({ fechar }) {
           mesmo. Recomendo baixar um novo backup pelo menos uma vez por semana.
         </p>
 
+        {info && info.existe && (
+          <p className="dica">
+            {info.emailAtivo ? "🟢" : "⚪️"} Backup semanal automático por e-mail —{" "}
+            {info.emailAtivo ? "ativo" : "não configurado"}
+          </p>
+        )}
+
         <hr className="separador" />
 
         <strong>📅 Calendário automático</strong>

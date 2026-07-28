@@ -33,6 +33,7 @@ router.get("/info", (req, res) => {
     tamanhoBytes: stat.size,
     tamanhoLegivel: formatarTamanho(stat.size),
     modificadoEm: stat.mtime,
+    emailAtivo: !!(process.env.BACKUP_EMAIL_USER && process.env.BACKUP_EMAIL_PASS),
   });
 });
 
