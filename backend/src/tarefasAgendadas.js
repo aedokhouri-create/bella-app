@@ -5,6 +5,7 @@ import cron from "node-cron";
 import fs from "node:fs";
 import path from "node:path";
 import { enviarEmail } from "./email.js";
+import { enviarPush, pushAtivo } from "./push.js";
 import { listarTarefas, listarContas } from "./db.js";
 
 const DATA_DIR = process.env.DATA_DIR || "./data";
@@ -70,28 +71,48 @@ async function rodarLembreteDiario() {
     }
   }
 
-  try {
-    await enviarEmail({
-      para: EMAIL_DESTINO,
-      assunto: `Bella — resumo do dia (${tarefas.length + contas.length} itens)`,
-      texto: linhas.join("\n"),
-    });
-    console.log(`[agendado] Lembrete diário enviado para ${EMAIL_DESTINO}`);
-  } catch (err) {
-    console.error("[agendado] Erro ao enviar lembrete diário:", err.message);
+  if (process.env.BACKUP_EMAIL_USER && process.env.BACKUP_EMAIL_PASS) {
+    try {
+      await enviarEmail({
+        para: EMAIL_DESTINO,
+        assunto: `Bella — resumo do dia (${tarefas.length + contas.length} itens)`,
+        texto: linhas.join("\n"),
+      });
+      console.log(`[agendado] Lembrete diário enviado por e-mail para ${EMAIL_DESTINO}`);
+    } catch (err) {
+      console.error("[agendado] Erro ao enviar lembrete diário por e-mail:", err.message);
+    }
+  }
+
+  if (pushAtivo()) {
+    const resumo =
+      tarefas.length && contas.length
+        ? `${tarefas.length} tarefa(s) e ${contas.length} conta(s) hoje`
+        : tarefas.length
+        ? `${tarefas.length} tarefa(s) hoje`
+        : `${contas.length} conta(s) vencendo`;
+    await enviarPush({ titulo: "Bella — resumo do dia", corpo: resumo, url: "/" });
+    console.log("[agendado] Lembrete diário enviado por notificação push.");
   }
 }
 
 export function iniciarTarefasAgendadas() {
-  if (!process.env.BACKUP_EMAIL_USER || !process.env.BACKUP_EMAIL_PASS) {
-    console.log("[agendado] BACKUP_EMAIL_USER/PASS não configurados — backup semanal e lembrete diário desativados.");
-    return;
+  const emailAtivo = process.env.BACKUP_EMAIL_USER && process.env.BACKUP_EMAIL_PASS;
+
+  if (emailAtivo) {
+    // Toda segunda-feira às 8h (Bahia) — só faz sentido por e-mail (anexa o banco inteiro).
+    cron.schedule("0 8 * * 1", rodarBackupSemanal, { timezone: FUSO });
+  } else {
+    console.log("[agendado] BACKUP_EMAIL_USER/PASS não configurados — backup semanal desativado.");
   }
-  // Toda segunda-feira às 8h (Bahia).
-  cron.schedule("0 8 * * 1", rodarBackupSemanal, { timezone: FUSO });
-  // Todo dia às 7h (Bahia).
-  cron.schedule("0 7 * * *", rodarLembreteDiario, { timezone: FUSO });
-  console.log("[agendado] Backup semanal (seg 8h) e lembrete diário (7h) programados.");
+
+  if (emailAtivo || pushAtivo()) {
+    // Todo dia às 7h (Bahia) — manda por e-mail e/ou push, o que estiver configurado.
+    cron.schedule("0 7 * * *", rodarLembreteDiario, { timezone: FUSO });
+    console.log(`[agendado] Lembrete diário (7h) programado. E-mail: ${emailAtivo ? "sim" : "não"}. Push: ${pushAtivo() ? "sim" : "não"}.`);
+  } else {
+    console.log("[agendado] Nenhum canal (e-mail/push) configurado — lembrete diário desativado.");
+  }
 }
 
 // Exportadas para teste manual/debug — não chamadas automaticamente.

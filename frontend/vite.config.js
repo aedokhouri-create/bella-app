@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.js",
+      injectManifest: { injectionPoint: "self.__WB_MANIFEST" },
       registerType: "autoUpdate",
       includeAssets: ["pwa-192x192.png", "pwa-512x512.png"],
       manifest: {
@@ -20,19 +24,6 @@ export default defineConfig({
         icons: [
           { src: "pwa-192x192.png", sizes: "192x192", type: "image/png" },
           { src: "pwa-512x512.png", sizes: "512x512", type: "image/png" },
-        ],
-      },
-      workbox: {
-        runtimeCaching: [
-          {
-            // Deixa a lista de tarefas disponível offline (mostra a última vista).
-            urlPattern: ({ url }) => url.pathname.startsWith("/api/tarefas"),
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "nina-tarefas",
-              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 7 },
-            },
-          },
         ],
       },
     }),

@@ -29,6 +29,9 @@ import {
   vozStatus,
   sintetizarVoz,
   calendarioStatus,
+  pushChavePublica,
+  pushInscrever,
+  pushTestar,
 } from "./api.js";
 
 const hojeChave = () => "nina_chat_" + new Date().toISOString().slice(0, 10);
@@ -103,6 +106,34 @@ function redimensionarImagem(file, maxLado = 1280, qualidade = 0.82) {
     };
     leitor.readAsDataURL(file);
   });
+}
+
+// O navegador exige a chave pública VAPID nesse formato (Uint8Array), não como string.
+function chaveParaUint8Array(base64) {
+  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  const base64Seguro = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const bruto = atob(base64Seguro);
+  return Uint8Array.from([...bruto].map((c) => c.charCodeAt(0)));
+}
+
+// Pede permissão de notificação e inscreve este dispositivo no push do servidor.
+// Retorna "ok", "negado" ou "indisponivel" (ex.: iPhone sem "Adicionar à Tela de Início").
+async function ativarNotificacoesPush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "indisponivel";
+  const permissao = await Notification.requestPermission();
+  if (permissao !== "granted") return "negado";
+  const { ativo, chave } = await pushChavePublica();
+  if (!ativo || !chave) return "indisponivel";
+  const registro = await navigator.serviceWorker.ready;
+  let inscricao = await registro.pushManager.getSubscription();
+  if (!inscricao) {
+    inscricao = await registro.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: chaveParaUint8Array(chave),
+    });
+  }
+  await pushInscrever(inscricao.toJSON());
+  return "ok";
 }
 
 // Lê um arquivo (ex.: PDF) como base64 puro, sem redimensionar — só faz sentido pra imagem.
@@ -1000,6 +1031,8 @@ function PainelBackup({ fechar }) {
   const [info, setInfo] = useState(null);
   const [erro, setErro] = useState("");
   const [calStatus, setCalStatus] = useState(null);
+  const [pushEstado, setPushEstado] = useState(""); // "" | "inscrito" | "ativando" | "negado" | "indisponivel"
+  const [pushTeste, setPushTeste] = useState("");
 
   useEffect(() => {
     backupInfo()
@@ -1008,7 +1041,35 @@ function PainelBackup({ fechar }) {
     calendarioStatus()
       .then(setCalStatus)
       .catch(() => {});
+    if ("serviceWorker" in navigator && "PushManager" in window) {
+      navigator.serviceWorker.ready
+        .then((r) => r.pushManager.getSubscription())
+        .then((s) => setPushEstado(s ? "inscrito" : ""))
+        .catch(() => {});
+    } else {
+      setPushEstado("indisponivel");
+    }
   }, []);
+
+  async function ativarPush() {
+    setPushEstado("ativando");
+    try {
+      const resultado = await ativarNotificacoesPush();
+      setPushEstado(resultado === "ok" ? "inscrito" : resultado);
+    } catch {
+      setPushEstado("erro");
+    }
+  }
+
+  async function testarPush() {
+    setPushTeste("enviando");
+    try {
+      await pushTestar();
+      setPushTeste("enviado");
+    } catch {
+      setPushTeste("erro");
+    }
+  }
 
   return (
     <div className="modal-fundo" onClick={fechar}>
@@ -1073,6 +1134,44 @@ function PainelBackup({ fechar }) {
         )}
         {calStatus && !calStatus.googleConfigurado && (
           <p className="dica">Google Calendar ainda não foi configurado no servidor.</p>
+        )}
+
+        <hr className="separador" />
+
+        <strong>🔔 Notificações no iPhone</strong>
+        {pushEstado === "indisponivel" && (
+          <p className="dica">
+            Seu navegador não suporta isso, ou o app ainda não foi "Adicionado à Tela de Início" —
+            no iPhone, a notificação só funciona depois de instalado assim.
+          </p>
+        )}
+        {pushEstado === "negado" && (
+          <p className="dica">
+            Notificação bloqueada. Vá em Ajustes do iPhone → Bella → Notificações e permita, depois
+            tente de novo.
+          </p>
+        )}
+        {pushEstado === "erro" && <p className="erro">Não consegui ativar agora. Tente de novo.</p>}
+        {(pushEstado === "" || pushEstado === "ativando" || pushEstado === "erro") && (
+          <>
+            <p className="dica">
+              Ative pra receber o resumo diário e lembretes direto na tela do iPhone, mesmo com a
+              Bella fechada.
+            </p>
+            <button type="button" className="btn-principal btn-baixar" onClick={ativarPush} disabled={pushEstado === "ativando"}>
+              {pushEstado === "ativando" ? "Ativando…" : "🔔 Ativar notificações"}
+            </button>
+          </>
+        )}
+        {pushEstado === "inscrito" && (
+          <>
+            <p className="dica">🟢 Notificações ativadas neste dispositivo.</p>
+            <button type="button" className="btn-principal btn-baixar" onClick={testarPush} disabled={pushTeste === "enviando"}>
+              {pushTeste === "enviando" ? "Enviando…" : "Testar notificação"}
+            </button>
+            {pushTeste === "enviado" && <p className="dica">Enviada! Deve chegar em alguns segundos.</p>}
+            {pushTeste === "erro" && <p className="erro">Não consegui enviar o teste agora.</p>}
+          </>
         )}
       </div>
     </div>

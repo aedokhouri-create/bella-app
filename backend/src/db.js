@@ -78,6 +78,13 @@ db.exec(`
     dados TEXT NOT NULL,        -- JSON: {titulo, subtitulo, secoes, fechamento} — mesmo formato do gerar_documento_docx
     criado_em TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS push_inscricoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    endpoint TEXT NOT NULL UNIQUE,  -- identifica o dispositivo/navegador (iPhone, iPad...)
+    dados TEXT NOT NULL,            -- JSON completo da inscrição (endpoint + keys p256dh/auth)
+    criado_em TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Migração segura: garante a coluna "categoria" em bancos antigos.
@@ -193,6 +200,20 @@ export function criarModelo({ nome, titulo, subtitulo, secoes, fechamento }) {
 }
 export function apagarModelo(id) {
   db.prepare("DELETE FROM modelos_documento WHERE id = ?").run(id);
+}
+
+/* ---------------- Inscrições de notificação push ---------------- */
+export function listarInscricoesPush() {
+  return db.prepare("SELECT * FROM push_inscricoes").all().map((r) => JSON.parse(r.dados));
+}
+export function salvarInscricaoPush(inscricao) {
+  db.prepare(
+    `INSERT INTO push_inscricoes (endpoint, dados) VALUES (@endpoint, @dados)
+     ON CONFLICT(endpoint) DO UPDATE SET dados = excluded.dados`
+  ).run({ endpoint: inscricao.endpoint, dados: JSON.stringify(inscricao) });
+}
+export function apagarInscricaoPush(endpoint) {
+  db.prepare("DELETE FROM push_inscricoes WHERE endpoint = ?").run(endpoint);
 }
 
 export function listarTarefas() {

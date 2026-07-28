@@ -42,3 +42,9 @@ services:
         sync: false
       - key: GOOGLE_REDIRECT_URI
         value: https://bella-app-cp0x.onrender.com/api/calendario/google/callback
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:aedokhouri@gmail.com

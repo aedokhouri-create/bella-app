@@ -15,6 +15,7 @@ import memoriasRouter from "./routes/memorias.js";
 import vozRouter from "./routes/voz.js";
 import modelosRouter from "./routes/modelos.js";
 import calendarioRouter from "./routes/calendario.js";
+import pushRouter from "./routes/push.js";
 import { iniciarTarefasAgendadas } from "./tarefasAgendadas.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,6 +36,7 @@ app.use("/api/memorias", memoriasRouter);
 app.use("/api/voz", vozRouter);
 app.use("/api/modelos", modelosRouter);
 app.use("/api/calendario", calendarioRouter);
+app.use("/api/push", pushRouter);
 
 // Em produção, o backend também serve o frontend já compilado (mesmo servidor).
 const frontendDist = path.join(__dirname, "../../frontend/dist");

@@ -126,3 +126,13 @@ export const sintetizarVoz = (texto, voz) =>
 
 /* ---------------- Calendário automático ---------------- */
 export const calendarioStatus = () => fetch("/api/calendario/status").then(json);
+
+/* ---------------- Notificação push ---------------- */
+export const pushChavePublica = () => fetch("/api/push/chave-publica").then(json);
+export const pushInscrever = (inscricao) =>
+  fetch("/api/push/inscrever", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(inscricao),
+  }).then(json);
+export const pushTestar = () => fetch("/api/push/testar", { method: "POST" }).then(json);
