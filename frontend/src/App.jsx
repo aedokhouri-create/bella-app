@@ -32,6 +32,8 @@ import {
   pushChavePublica,
   pushInscrever,
   pushTestar,
+  listarModelos,
+  apagarModelo,
 } from "./api.js";
 
 const hojeChave = () => "nina_chat_" + new Date().toISOString().slice(0, 10);
@@ -200,7 +202,7 @@ export default function App() {
           </div>
         </div>
         <div className="topo-acoes">
-          <button className="backup-btn" onClick={() => setMemoriaAberta(true)} title="O que a Bella sabe sobre você">
+          <button className="backup-btn" onClick={() => setMemoriaAberta(true)} title="O que a Bella sabe / modelos de documento">
             🧠
           </button>
           <button className="backup-btn" onClick={() => setVozAberto(true)} title="Escolher a voz da Bella">
@@ -1372,14 +1374,22 @@ function PainelVoz({ fechar }) {
 
 /* ---------------- Memória de longo prazo ---------------- */
 function PainelMemoria({ fechar }) {
+  const [sub, setSub] = useState("memorias"); // memorias | modelos
   const [memorias, setMemorias] = useState([]);
   const [carregando, setCarregando] = useState(true);
+  const [modelos, setModelos] = useState([]);
+  const [carregandoModelos, setCarregandoModelos] = useState(true);
+  const [modeloAberto, setModeloAberto] = useState(null);
 
   useEffect(() => {
     listarMemorias()
       .then(setMemorias)
       .catch(() => {})
       .finally(() => setCarregando(false));
+    listarModelos()
+      .then(setModelos)
+      .catch(() => {})
+      .finally(() => setCarregandoModelos(false));
   }, []);
 
   async function remover(id) {
@@ -1388,37 +1398,101 @@ function PainelMemoria({ fechar }) {
     await apagarMemoria(id).catch(() => {});
   }
 
+  async function removerModelo(id) {
+    if (!confirm("Apagar este modelo de documento?")) return;
+    setModelos((m) => m.filter((x) => x.id !== id));
+    if (modeloAberto === id) setModeloAberto(null);
+    await apagarModelo(id).catch(() => {});
+  }
+
   return (
     <div className="modal-fundo" onClick={fechar}>
       <div className="modal-backup" onClick={(e) => e.stopPropagation()}>
         <div className="modal-topo">
-          <strong>🧠 O que a Bella sabe</strong>
+          <strong>{sub === "memorias" ? "🧠 O que a Bella sabe" : "📐 Modelos de documento"}</strong>
           <button className="fechar" onClick={fechar}>
             ✕
           </button>
         </div>
 
-        <p className="dica">
-          Fatos e contextos que ela guarda pra sempre, em qualquer conversa — diferente do
-          chat do dia, que reinicia todo dia. Ela mesma decide o que vale guardar; aqui você
-          pode conferir e apagar o que quiser.
-        </p>
+        <div className="subabas">
+          <button className={sub === "memorias" ? "sel" : ""} onClick={() => setSub("memorias")}>
+            🧠 Memórias
+          </button>
+          <button className={sub === "modelos" ? "sel" : ""} onClick={() => setSub("modelos")}>
+            📐 Modelos
+          </button>
+        </div>
 
-        {carregando && <p className="dica">Carregando…</p>}
-        {!carregando && memorias.length === 0 && (
-          <p className="dica">Nenhuma memória guardada ainda.</p>
-        )}
-        {memorias.length > 0 && (
-          <div className="lista-memorias">
-            {memorias.map((m) => (
-              <div key={m.id} className="memoria-item">
-                <span>{m.conteudo}</span>
-                <button onClick={() => remover(m.id)} title="Apagar esta memória">
-                  🗑
-                </button>
+        {sub === "memorias" && (
+          <>
+            <p className="dica">
+              Fatos e contextos que ela guarda pra sempre, em qualquer conversa — diferente do
+              chat do dia, que reinicia todo dia. Ela mesma decide o que vale guardar; aqui você
+              pode conferir e apagar o que quiser.
+            </p>
+
+            {carregando && <p className="dica">Carregando…</p>}
+            {!carregando && memorias.length === 0 && (
+              <p className="dica">Nenhuma memória guardada ainda.</p>
+            )}
+            {memorias.length > 0 && (
+              <div className="lista-memorias">
+                {memorias.map((m) => (
+                  <div key={m.id} className="memoria-item">
+                    <span>{m.conteudo}</span>
+                    <button onClick={() => remover(m.id)} title="Apagar esta memória">
+                      🗑
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </>
+        )}
+
+        {sub === "modelos" && (
+          <>
+            <p className="dica">
+              Estruturas de relatórios/atestados já aprovados, guardadas pra reusar sem montar
+              do zero. Peça "guarda esse modelo" depois que aprovar um documento; da próxima vez
+              é só pedir "usa o modelo X".
+            </p>
+
+            {carregandoModelos && <p className="dica">Carregando…</p>}
+            {!carregandoModelos && modelos.length === 0 && (
+              <p className="dica">Nenhum modelo guardado ainda.</p>
+            )}
+            {modelos.length > 0 && (
+              <div className="lista-memorias">
+                {modelos.map((md) => {
+                  const aberto = modeloAberto === md.id;
+                  return (
+                    <div key={md.id} className="modelo-item">
+                      <div className="modelo-cabecalho" onClick={() => setModeloAberto(aberto ? null : md.id)}>
+                        <span>{aberto ? "▾" : "▸"} {md.nome}</span>
+                        <button onClick={(e) => { e.stopPropagation(); removerModelo(md.id); }} title="Apagar este modelo">
+                          🗑
+                        </button>
+                      </div>
+                      {aberto && (
+                        <div className="modelo-preview">
+                          <strong>{md.titulo}</strong>
+                          {md.subtitulo && <div className="dica">{md.subtitulo}</div>}
+                          {(md.secoes || []).map((s, i) => (
+                            <div key={i} className="modelo-secao">
+                              <strong>{s.titulo}</strong>
+                              <p>{s.texto}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

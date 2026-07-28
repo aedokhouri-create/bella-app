@@ -115,6 +115,10 @@ export const backupInfo = () => fetch("/api/backup/info").then(json);
 export const listarMemorias = () => fetch("/api/memorias").then(json);
 export const apagarMemoria = (id) => fetch(`/api/memorias/${id}`, { method: "DELETE" }).then(json);
 
+/* ---------------- Modelos de documento ---------------- */
+export const listarModelos = () => fetch("/api/modelos").then(json);
+export const apagarModelo = (id) => fetch(`/api/modelos/${id}`, { method: "DELETE" }).then(json);
+
 /* ---------------- Voz natural (Google Cloud TTS) ---------------- */
 export const vozStatus = () => fetch("/api/voz/vozes").then(json);
 export const sintetizarVoz = (texto, voz) =>

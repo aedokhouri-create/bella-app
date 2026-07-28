@@ -386,6 +386,19 @@ body {
 .memoria-item button { border: none; background: none; font-size: 16px; flex: 0 0 auto; opacity: 0.7; }
 .chip-memoria { background: #ede4fb; color: #5b3a99; display: block; margin-top: 6px; }
 
+/* Modelos de documento (mesmo modal, aba diferente) */
+.modelo-item { background: var(--bg); border: 1px solid var(--borda); border-radius: 12px; overflow: hidden; }
+.modelo-cabecalho {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.modelo-cabecalho button { border: none; background: none; font-size: 16px; flex: 0 0 auto; opacity: 0.7; }
+.modelo-preview { padding: 0 12px 12px; font-size: 13px; color: var(--texto); }
+.modelo-preview > strong { display: block; margin-bottom: 4px; }
+.modelo-secao { margin-top: 8px; }
+.modelo-secao strong { display: block; font-size: 12px; text-transform: uppercase; color: var(--cinza); }
+.modelo-secao p { margin: 2px 0 0; white-space: pre-wrap; }
+
 /* Voz da Bella (modal) */
 .lista-vozes { display: flex; flex-direction: column; gap: 6px; max-height: 45vh; overflow-y: auto; }
 .voz-opcao {
