@@ -935,6 +935,7 @@ function Calendario({ tarefas, recarregar, setTarefas, contas }) {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [diaSelecionado, setDiaSelecionado] = useState(() => isoDe(new Date()));
+  const [sheetAberto, setSheetAberto] = useState(false);
 
   const itensPorDia = useMemo(() => {
     const mapa = {};
@@ -968,6 +969,7 @@ function Calendario({ tarefas, recarregar, setTarefas, contas }) {
   const celulas = [];
   for (let i = 0; i < primeiroDiaSemana; i++) celulas.push(null);
   for (let d = 1; d <= diasNoMes; d++) celulas.push(d);
+  const linhas = Math.ceil(celulas.length / 7);
 
   function isoDoDia(d) {
     return `${ano}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -1020,7 +1022,7 @@ function Calendario({ tarefas, recarregar, setTarefas, contas }) {
           <span key={i}>{d}</span>
         ))}
       </div>
-      <div className="cal-grade">
+      <div className="cal-grade" style={{ "--linhas": linhas }}>
         {celulas.map((d, i) => {
           if (d == null) return <div key={i} className="cal-dia vazia" />;
           const iso = isoDoDia(d);
@@ -1038,7 +1040,10 @@ function Calendario({ tarefas, recarregar, setTarefas, contas }) {
                 (iso === hoje ? " hoje" : "") +
                 (temAlta ? " urgente" : "")
               }
-              onClick={() => setDiaSelecionado(iso)}
+              onClick={() => {
+                setDiaSelecionado(iso);
+                setSheetAberto(true);
+              }}
             >
               <span className="cal-dia-num">{d}</span>
               {total > 0 && (
@@ -1052,40 +1057,45 @@ function Calendario({ tarefas, recarregar, setTarefas, contas }) {
         })}
       </div>
 
-      <div className="cal-lista">
-        <div className="cal-lista-titulo">{formatarData(diaSelecionado)}</div>
-        {itensDia.tarefas.length === 0 && itensDia.contas.length === 0 ? (
-          <p className="dica">Nada por aqui. 🎉</p>
-        ) : (
-          <>
-            {itensDia.tarefas.map((t) => (
-              <div key={"t" + t.id} className={"cal-item prio-" + (t.prioridade || "media") + (t.status === "concluida" ? " feita" : "")}>
-                <button className="check" onClick={() => alternar(t)} title="Concluir">
-                  {t.status === "concluida" ? "☑" : "☐"}
-                </button>
-                <div className="cal-item-corpo">
-                  <div className="cal-item-titulo">{t.titulo}</div>
-                  {(t.hora || t.categoria) && (
-                    <div className="cal-item-meta">
-                      {t.hora && <span>🕐 {t.hora}</span>}
-                      {t.categoria && <span>{t.categoria}</span>}
+      {sheetAberto && (
+        <div className="cal-sheet-fundo" onClick={() => setSheetAberto(false)}>
+          <div className="cal-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="cal-sheet-alca" />
+            <div className="cal-lista-titulo">{formatarData(diaSelecionado)}</div>
+            {itensDia.tarefas.length === 0 && itensDia.contas.length === 0 ? (
+              <p className="dica">Nada por aqui. 🎉</p>
+            ) : (
+              <>
+                {itensDia.tarefas.map((t) => (
+                  <div key={"t" + t.id} className={"cal-item prio-" + (t.prioridade || "media") + (t.status === "concluida" ? " feita" : "")}>
+                    <button className="check" onClick={() => alternar(t)} title="Concluir">
+                      {t.status === "concluida" ? "☑" : "☐"}
+                    </button>
+                    <div className="cal-item-corpo">
+                      <div className="cal-item-titulo">{t.titulo}</div>
+                      {(t.hora || t.categoria) && (
+                        <div className="cal-item-meta">
+                          {t.hora && <span>🕐 {t.hora}</span>}
+                          {t.categoria && <span>{t.categoria}</span>}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-            ))}
-            {itensDia.contas.map((c) => (
-              <div key={"c" + c.id} className="cal-item conta">
-                <span className="cal-item-icone">💰</span>
-                <div className="cal-item-corpo">
-                  <div className="cal-item-titulo">{c.titulo}</div>
-                  {c.valor != null && <div className="cal-item-meta">R$ {Number(c.valor).toFixed(2)}</div>}
-                </div>
-              </div>
-            ))}
-          </>
-        )}
-      </div>
+                  </div>
+                ))}
+                {itensDia.contas.map((c) => (
+                  <div key={"c" + c.id} className="cal-item conta">
+                    <span className="cal-item-icone">💰</span>
+                    <div className="cal-item-corpo">
+                      <div className="cal-item-titulo">{c.titulo}</div>
+                      {c.valor != null && <div className="cal-item-meta">R$ {Number(c.valor).toFixed(2)}</div>}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

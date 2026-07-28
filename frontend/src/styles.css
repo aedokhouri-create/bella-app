@@ -146,25 +146,28 @@ body {
 .cartao.atrasada { border-left-color: var(--alta); }
 
 /* Calendário */
-.calendario { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 10px 14px 14px; overflow-y: auto; }
-.cal-nav { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px 8px; }
+.calendario { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 10px 10px 10px; }
+.cal-nav { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 6px; flex: 0 0 auto; }
 .cal-nav button {
-  border: none; background: var(--card); color: var(--teal-d); width: 36px; height: 36px;
-  border-radius: 50%; font-size: 19px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08); flex: 0 0 auto;
+  border: none; background: var(--card); color: var(--teal-d); width: 34px; height: 34px;
+  border-radius: 50%; font-size: 18px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08); flex: 0 0 auto;
 }
-.cal-nav-meio { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.cal-nav-meio strong { color: var(--teal-d); text-transform: capitalize; font-size: 17px; }
-.cal-resumo-mes { font-size: 12px; color: var(--cinza); }
+.cal-nav-meio { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.cal-nav-meio strong { color: var(--teal-d); text-transform: capitalize; font-size: 18px; }
+.cal-resumo-mes { font-size: 11px; color: var(--cinza); }
 .cal-btn-hoje {
   align-self: center; border: 1px solid var(--teal); background: transparent; color: var(--teal-d);
-  font-size: 12px; font-weight: 600; padding: 4px 14px; border-radius: 14px; margin-bottom: 8px;
+  font-size: 12px; font-weight: 600; padding: 3px 14px; border-radius: 14px; margin-bottom: 6px; flex: 0 0 auto;
 }
-.cal-semana { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 12px; color: var(--cinza); margin-bottom: 6px; font-weight: 600; }
-.cal-grade { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-semana { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 12px; color: var(--cinza); margin-bottom: 6px; font-weight: 600; flex: 0 0 auto; }
+.cal-grade {
+  flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(var(--linhas), 1fr); gap: 5px;
+}
 .cal-dia {
-  aspect-ratio: 1; border: none; background: var(--card); border-radius: 14px;
-  font-size: 15px; color: var(--texto); position: relative; min-width: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  border: none; background: var(--card); border-radius: 16px;
+  font-size: 18px; color: var(--texto); position: relative; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); transition: transform 0.1s ease;
 }
 .cal-dia:active { transform: scale(0.94); }
@@ -176,12 +179,22 @@ body {
   box-shadow: 0 4px 10px rgba(11, 23, 48, 0.35);
 }
 .cal-dia-num { line-height: 1; }
-.cal-pontos { display: flex; gap: 3px; height: 6px; }
-.cal-ponto { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); }
+.cal-pontos { display: flex; gap: 4px; height: 7px; }
+.cal-ponto { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); }
 .cal-ponto.tarefa.alta { background: var(--alta); }
 .cal-ponto.conta { background: #b8860b; }
 .cal-dia.sel .cal-ponto { background: rgba(255, 255, 255, 0.85); }
-.cal-lista { margin-top: 16px; }
+
+/* Sheet de detalhe do dia (sobrepõe, não empurra o calendário) */
+.cal-sheet-fundo {
+  position: fixed; inset: 0; background: rgba(10, 20, 30, 0.5);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 50;
+}
+.cal-sheet {
+  background: var(--card); width: 100%; max-width: 640px; border-radius: 20px 20px 0 0;
+  padding: 8px 18px max(18px, env(safe-area-inset-bottom)); max-height: 60vh; overflow-y: auto;
+}
+.cal-sheet-alca { width: 40px; height: 4px; border-radius: 2px; background: var(--borda); margin: 4px auto 12px; }
 .cal-lista-titulo { font-weight: 700; color: var(--teal-d); text-transform: capitalize; margin-bottom: 8px; font-size: 15px; }
 .cal-item {
   background: var(--card); border-radius: 14px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
