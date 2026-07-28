@@ -672,28 +672,30 @@ function baixarICS({ titulo, data, hora, descricao }) {
 }
 
 function Agenda({ tarefas, recarregarTarefas, setTarefas, contas, recarregarContas, setContas }) {
-  const [sub, setSub] = useState("tarefas"); // tarefas | contas
+  const [sub, setSub] = useState("calendario"); // calendario | tarefas | contas
 
   return (
     <div className="painel-tarefas">
       <div className="subabas">
+        <button className={sub === "calendario" ? "sel" : ""} onClick={() => setSub("calendario")}>
+          📆 Calendário
+        </button>
         <button className={sub === "tarefas" ? "sel" : ""} onClick={() => setSub("tarefas")}>
           ✅ Tarefas
         </button>
         <button className={sub === "contas" ? "sel" : ""} onClick={() => setSub("contas")}>
           💰 Contas
         </button>
-        <button className={sub === "calendario" ? "sel" : ""} onClick={() => setSub("calendario")}>
-          📆 Calendário
-        </button>
       </div>
+      {sub === "calendario" && (
+        <Calendario tarefas={tarefas} recarregar={recarregarTarefas} setTarefas={setTarefas} contas={contas} />
+      )}
       {sub === "tarefas" && (
         <ListaTarefas tarefas={tarefas} recarregar={recarregarTarefas} setTarefas={setTarefas} />
       )}
       {sub === "contas" && (
         <ListaContas contas={contas} recarregar={recarregarContas} setContas={setContas} />
       )}
-      {sub === "calendario" && <Calendario tarefas={tarefas} contas={contas} />}
     </div>
   );
 }
@@ -925,7 +927,7 @@ function ListaContas({ contas, recarregar, setContas }) {
 
 const DIAS_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"];
 
-function Calendario({ tarefas, contas }) {
+function Calendario({ tarefas, recarregar, setTarefas, contas }) {
   const [mesAtual, setMesAtual] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -946,6 +948,16 @@ function Calendario({ tarefas, contas }) {
     return mapa;
   }, [tarefas, contas]);
 
+  async function alternar(t) {
+    const novo = t.status === "concluida" ? "pendente" : "concluida";
+    setTarefas((lista) => lista.map((x) => (x.id === t.id ? { ...x, status: novo } : x)));
+    try {
+      await atualizarTarefa(t.id, { status: novo });
+    } finally {
+      recarregar();
+    }
+  }
+
   const ano = mesAtual.getFullYear();
   const mes = mesAtual.getMonth();
   const primeiroDiaSemana = new Date(ano, mes, 1).getDay();
@@ -963,13 +975,44 @@ function Calendario({ tarefas, contas }) {
   const itensDia = itensPorDia[diaSelecionado] || { tarefas: [], contas: [] };
   const nomeMes = mesAtual.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
+  const resumoMes = useMemo(() => {
+    let t = 0,
+      c = 0;
+    for (const iso in itensPorDia) {
+      if (!iso.startsWith(`${ano}-${String(mes + 1).padStart(2, "0")}`)) continue;
+      t += itensPorDia[iso].tarefas.length;
+      c += itensPorDia[iso].contas.length;
+    }
+    return { t, c };
+  }, [itensPorDia, ano, mes]);
+
   return (
     <div className="calendario">
       <div className="cal-nav">
         <button onClick={() => setMesAtual(new Date(ano, mes - 1, 1))}>‹</button>
-        <strong>{nomeMes}</strong>
+        <div className="cal-nav-meio">
+          <strong>{nomeMes}</strong>
+          {(resumoMes.t > 0 || resumoMes.c > 0) && (
+            <span className="cal-resumo-mes">
+              {resumoMes.t > 0 && `${resumoMes.t} tarefa${resumoMes.t > 1 ? "s" : ""}`}
+              {resumoMes.t > 0 && resumoMes.c > 0 && " · "}
+              {resumoMes.c > 0 && `${resumoMes.c} conta${resumoMes.c > 1 ? "s" : ""}`}
+            </span>
+          )}
+        </div>
         <button onClick={() => setMesAtual(new Date(ano, mes + 1, 1))}>›</button>
       </div>
+      {diaSelecionado !== hoje && (
+        <button
+          className="cal-btn-hoje"
+          onClick={() => {
+            setMesAtual(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+            setDiaSelecionado(hoje);
+          }}
+        >
+          Ir para hoje
+        </button>
+      )}
       <div className="cal-semana">
         {DIAS_SEMANA.map((d, i) => (
           <span key={i}>{d}</span>
@@ -980,15 +1023,28 @@ function Calendario({ tarefas, contas }) {
           if (d == null) return <div key={i} className="cal-dia vazia" />;
           const iso = isoDoDia(d);
           const item = itensPorDia[iso];
-          const temItem = item && (item.tarefas.length > 0 || item.contas.length > 0);
+          const temAlta = item?.tarefas.some((t) => t.prioridade === "alta" && t.status !== "concluida");
+          const pendentes = item ? item.tarefas.filter((t) => t.status !== "concluida").length : 0;
+          const temConta = item && item.contas.length > 0;
+          const total = item ? item.tarefas.length + item.contas.length : 0;
           return (
             <button
               key={i}
-              className={"cal-dia" + (iso === diaSelecionado ? " sel" : "") + (iso === hoje ? " hoje" : "")}
+              className={
+                "cal-dia" +
+                (iso === diaSelecionado ? " sel" : "") +
+                (iso === hoje ? " hoje" : "") +
+                (temAlta ? " urgente" : "")
+              }
               onClick={() => setDiaSelecionado(iso)}
             >
-              {d}
-              {temItem && <span className="cal-ponto" />}
+              <span className="cal-dia-num">{d}</span>
+              {total > 0 && (
+                <span className="cal-pontos">
+                  {pendentes > 0 && <span className={"cal-ponto tarefa" + (temAlta ? " alta" : "")} />}
+                  {temConta && <span className="cal-ponto conta" />}
+                </span>
+              )}
             </button>
           );
         })}
@@ -997,19 +1053,32 @@ function Calendario({ tarefas, contas }) {
       <div className="cal-lista">
         <div className="cal-lista-titulo">{formatarData(diaSelecionado)}</div>
         {itensDia.tarefas.length === 0 && itensDia.contas.length === 0 ? (
-          <p className="dica">Nada para este dia.</p>
+          <p className="dica">Nada por aqui. 🎉</p>
         ) : (
           <>
             {itensDia.tarefas.map((t) => (
-              <div key={"t" + t.id} className="cal-item">
-                ✅ {t.titulo}
-                {t.hora ? ` · ${t.hora}` : ""}
+              <div key={"t" + t.id} className={"cal-item prio-" + (t.prioridade || "media") + (t.status === "concluida" ? " feita" : "")}>
+                <button className="check" onClick={() => alternar(t)} title="Concluir">
+                  {t.status === "concluida" ? "☑" : "☐"}
+                </button>
+                <div className="cal-item-corpo">
+                  <div className="cal-item-titulo">{t.titulo}</div>
+                  {(t.hora || t.categoria) && (
+                    <div className="cal-item-meta">
+                      {t.hora && <span>🕐 {t.hora}</span>}
+                      {t.categoria && <span>{t.categoria}</span>}
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
             {itensDia.contas.map((c) => (
               <div key={"c" + c.id} className="cal-item conta">
-                💰 {c.titulo}
-                {c.valor != null ? ` · R$ ${Number(c.valor).toFixed(2)}` : ""}
+                <span className="cal-item-icone">💰</span>
+                <div className="cal-item-corpo">
+                  <div className="cal-item-titulo">{c.titulo}</div>
+                  {c.valor != null && <div className="cal-item-meta">R$ {Number(c.valor).toFixed(2)}</div>}
+                </div>
               </div>
             ))}
           </>
