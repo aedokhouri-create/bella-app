@@ -361,6 +361,10 @@ body {
   padding: 10px; border-radius: 12px; font-size: 14px;
 }
 .conta-opcoes button.sel { background: var(--teal); color: #fff; border-color: var(--teal); font-weight: 600; }
+.btn-importar-contatos {
+  width: 100%; border: 1px dashed var(--teal); background: transparent; color: var(--teal-d);
+  padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 600; margin-bottom: 16px;
+}
 .lista-contatos { display: flex; flex-direction: column; gap: 10px; }
 .cartao-contato {
   display: flex; align-items: center; gap: 10px; background: var(--card);

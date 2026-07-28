@@ -138,6 +138,31 @@ async function ativarNotificacoesPush() {
   return "ok";
 }
 
+// Extrai {nome, telefone} de cada contato de um arquivo .vcf exportado do iPhone.
+function parseVCF(texto) {
+  const contatos = [];
+  const blocos = String(texto || "").split(/BEGIN:VCARD/i).slice(1);
+  for (const bloco of blocos) {
+    const linhas = bloco.split(/\r\n|\n|\r/);
+    let nome = "";
+    let telefone = "";
+    for (const linha of linhas) {
+      if (!nome && /^FN[:;]/i.test(linha)) {
+        nome = linha.split(":").slice(1).join(":").trim();
+      } else if (!telefone && /^TEL[:;]/i.test(linha)) {
+        telefone = linha
+          .split(":")
+          .slice(1)
+          .join(":")
+          .trim()
+          .replace(/[^\d+]/g, "");
+      }
+    }
+    if (nome && telefone) contatos.push({ nome, telefone });
+  }
+  return contatos;
+}
+
 // Lê um arquivo (ex.: PDF) como base64 puro, sem redimensionar — só faz sentido pra imagem.
 function lerArquivoBase64(file) {
   return new Promise((resolve, reject) => {
@@ -1901,6 +1926,10 @@ function Contatos() {
   const [telefone, setTelefone] = useState("");
   const [conta, setConta] = useState("pessoal");
   const [carregando, setCarregando] = useState(true);
+  const [importados, setImportados] = useState(null); // lista pra revisar antes de confirmar
+  const [contaImportacao, setContaImportacao] = useState("pessoal");
+  const [importando, setImportando] = useState(false);
+  const arquivoVcfRef = useRef(null);
 
   useEffect(() => {
     recarregar();
@@ -1931,6 +1960,39 @@ function Contatos() {
     await apagarContato(id).catch(() => {});
   }
 
+  async function selecionarArquivoVcf(e) {
+    const arquivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!arquivo) return;
+    const texto = await arquivo.text();
+    const extraidos = parseVCF(texto);
+    if (extraidos.length === 0) {
+      alert("Não encontrei nenhum contato válido nesse arquivo.");
+      return;
+    }
+    const jaExistentes = new Set(contatos.map((c) => c.telefone.replace(/\D/g, "")));
+    const novos = extraidos.filter((c) => !jaExistentes.has(c.telefone.replace(/\D/g, "")));
+    setImportados({ novos, repetidos: extraidos.length - novos.length });
+  }
+
+  async function confirmarImportacao() {
+    if (!importados) return;
+    setImportando(true);
+    let ok = 0;
+    for (const c of importados.novos) {
+      try {
+        const novo = await criarContato({ nome: c.nome, telefone: c.telefone, conta: contaImportacao });
+        setContatos((lista) => [...lista, novo].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")));
+        ok++;
+      } catch {
+        /* pula esse e segue os outros */
+      }
+    }
+    setImportando(false);
+    setImportados(null);
+    alert(`${ok} contato${ok === 1 ? "" : "s"} importado${ok === 1 ? "" : "s"} com sucesso.`);
+  }
+
   return (
     <div className="painel-contatos">
       <form className="form-contato" onSubmit={adicionar}>
@@ -1958,6 +2020,17 @@ function Contatos() {
         </button>
       </form>
 
+      <button type="button" className="btn-importar-contatos" onClick={() => arquivoVcfRef.current?.click()}>
+        📇 Importar contatos do iPhone (.vcf)
+      </button>
+      <input
+        ref={arquivoVcfRef}
+        type="file"
+        accept=".vcf,text/vcard,text/x-vcard"
+        style={{ display: "none" }}
+        onChange={selecionarArquivoVcf}
+      />
+
       {!carregando && contatos.length === 0 && (
         <div className="vazio">
           <p>Nenhum contato salvo ainda.</p>
@@ -1981,6 +2054,37 @@ function Contatos() {
           </div>
         ))}
       </div>
+
+      {importados && (
+        <div className="modal-fundo" onClick={() => !importando && setImportados(null)}>
+          <div className="modal-backup" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-topo">
+              <strong>📇 Importar contatos</strong>
+              {!importando && (
+                <button className="fechar" onClick={() => setImportados(null)}>
+                  ✕
+                </button>
+              )}
+            </div>
+            <p className="dica">
+              Encontrei <strong>{importados.novos.length}</strong> contato{importados.novos.length === 1 ? "" : "s"} novo{importados.novos.length === 1 ? "" : "s"} nesse arquivo
+              {importados.repetidos > 0 && ` (${importados.repetidos} já estavam salvos e foram ignorados)`}.
+            </p>
+            <p className="dica">Salvar todos como:</p>
+            <div className="conta-opcoes">
+              <button type="button" className={contaImportacao === "pessoal" ? "sel" : ""} onClick={() => setContaImportacao("pessoal")}>
+                Pessoal
+              </button>
+              <button type="button" className={contaImportacao === "profissional" ? "sel" : ""} onClick={() => setContaImportacao("profissional")}>
+                Profissional
+              </button>
+            </div>
+            <button type="button" className="btn-principal btn-baixar" onClick={confirmarImportacao} disabled={importando || importados.novos.length === 0}>
+              {importando ? "Importando…" : `Importar ${importados.novos.length} contato${importados.novos.length === 1 ? "" : "s"}`}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
