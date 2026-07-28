@@ -44,7 +44,10 @@ async function obterCliente() {
 async function obterCalendario(client) {
   if (calendarioAlvo) return calendarioAlvo;
   const calendarios = await client.fetchCalendars();
-  const escrivivel = calendarios.find((c) => !c.readOnly) || calendarios[0];
+  // Só calendários de evento (VEVENT) servem — listas de lembretes (VTODO) rejeitam.
+  const deEventos = calendarios.filter((c) => !c.readOnly && c.components?.includes("VEVENT"));
+  const escrivivel =
+    deEventos.find((c) => c.displayName === "Calendário") || deEventos[0] || calendarios[0];
   calendarioAlvo = escrivivel;
   return escrivivel;
 }
