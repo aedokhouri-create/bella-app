@@ -12,7 +12,7 @@ import {
   criarModelo,
 } from "./db.js";
 import { gerarDocumentoDocx } from "./documentos.js";
-import { cadastrarCirurgiaNoCmot } from "./cmot.js";
+import { cadastrarCirurgiaNoCmot, listarCirurgiasDoDia } from "./cmot.js";
 import { sincronizarTarefaApple, sincronizarContaApple, sincronizarTarefaGoogle, sincronizarContaGoogle } from "./calendarioSync.js";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
@@ -259,6 +259,20 @@ const ferramentaCadastrarCirurgiaCmot = {
   },
 };
 
+const ferramentaConsultarCirurgiasCmot = {
+  name: "consultar_cirurgias_cmot",
+  description:
+    "Consulta as cirurgias dele cadastradas no CMOT (sistema da clínica) numa data — use " +
+    "quando ele perguntar algo como 'quais minhas cirurgias hoje', 'tenho cirurgia amanhã', " +
+    "'o que tenho marcado no CMOT'. Só leitura, nunca cria nem altera nada.",
+  input_schema: {
+    type: "object",
+    properties: {
+      data: { type: "string", description: "Data YYYY-MM-DD a consultar (padrão: hoje)" },
+    },
+  },
+};
+
 function montarLinkWhatsApp(numero, conta, mensagem) {
   const texto = encodeURIComponent(mensagem || "");
   if (conta === "profissional") {
@@ -397,6 +411,10 @@ function sistema(memorias = [], modelos = []) {
     "data de nascimento. Depois de cadastrar, confirme em uma frase curta e natural o que " +
     "aconteceu (paciente novo ou já existente, cirurgia criada ou atualizada), do jeito que " +
     "você contaria pra ele o que fez de verdade.\n\n" +
+    "Quando ele perguntar sobre a agenda cirúrgica dele (ex.: 'quais minhas cirurgias hoje', " +
+    "'tenho cirurgia amanhã', 'o que tenho marcado no CMOT'), use a ferramenta " +
+    "consultar_cirurgias_cmot — é só leitura, pode chamar sem pedir confirmação. Responda de " +
+    "forma corrida e natural, sem lista com marcador na fala.\n\n" +
     "A conversa de hoje reinicia todo dia — o que você sabe de verdade, pra sempre, é só o " +
     "que está guardado como memória (lista abaixo). Use a ferramenta salvar_memoria por " +
     "conta própria quando ele contar algo que vale lembrar sempre (família, preferências, " +
@@ -430,6 +448,7 @@ const FERRAMENTAS = [
   ferramentaWhatsApp,
   ferramentaGerarDocumento,
   ferramentaCadastrarCirurgiaCmot,
+  ferramentaConsultarCirurgiasCmot,
   ferramentaSalvarMemoria,
   ferramentaSalvarModeloDocumento,
 ];
@@ -564,6 +583,31 @@ export async function conversar({ message, history, imagem }) {
             type: "tool_result",
             tool_use_id: bloco.id,
             content: `Não consegui cadastrar no CMOT agora (${err.message}). Avise o usuário e sugira tentar de novo, ou fazer manualmente no app do CMOT.`,
+            is_error: true,
+          });
+        }
+      } else if (bloco.name === "consultar_cirurgias_cmot") {
+        try {
+          const lista = await listarCirurgiasDoDia(bloco.input.data);
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: bloco.id,
+            content:
+              lista.length === 0
+                ? "Nenhuma cirurgia cadastrada no CMOT para essa data."
+                : lista
+                    .map(
+                      (c) =>
+                        `${c.horario || "sem horário"} — ${c.paciente} — ${c.procedimento} — ${c.hospital} — ${c.status}${c.tipo === "URGENCIA" ? " — URGÊNCIA" : ""}`
+                    )
+                    .join("\n"),
+          });
+        } catch (err) {
+          console.error("Erro ao consultar cirurgias no CMOT:", err);
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: bloco.id,
+            content: `Não consegui consultar o CMOT agora (${err.message}).`,
             is_error: true,
           });
         }

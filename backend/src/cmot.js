@@ -157,6 +157,25 @@ async function registrarCirurgia({
   return { cirurgia: nova, atualizada: false };
 }
 
+// Cirurgias do médico (dele) numa data — padrão hoje. Usado tanto pela ferramenta de
+// chat quanto pelo lembrete diário automático. Nunca cancelada.
+export async function listarCirurgiasDoDia(data) {
+  const alvo = data || new Date().toISOString().split("T")[0];
+  const medicoId = await obterMedicoIdPadrao();
+  const cirurgias = await cmotFetch("/cirurgias");
+  return cirurgias
+    .filter((c) => c.medico_id === medicoId && c.data_prevista === alvo && c.status !== "CANCELADA")
+    .sort((a, b) => (a.horario || "99:99").localeCompare(b.horario || "99:99"))
+    .map((c) => ({
+      paciente: c.paciente_nome,
+      procedimento: c.procedimento,
+      hospital: c.hospital,
+      horario: c.horario,
+      status: c.status,
+      tipo: c.tipo,
+    }));
+}
+
 // Ponto de entrada único usado pela ferramenta da Bella.
 export async function cadastrarCirurgiaNoCmot(dados) {
   const medicoId = await obterMedicoIdPadrao();

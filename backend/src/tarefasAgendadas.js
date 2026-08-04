@@ -7,6 +7,7 @@ import path from "node:path";
 import { enviarEmail } from "./email.js";
 import { enviarPush, pushAtivo } from "./push.js";
 import { listarTarefas, listarContas } from "./db.js";
+import { listarCirurgiasDoDia } from "./cmot.js";
 
 const DATA_DIR = process.env.DATA_DIR || "./data";
 const DB_PATH = path.join(DATA_DIR, "nina.db");
@@ -54,10 +55,24 @@ async function rodarLembreteDiario() {
   const contas = listarContas().filter(
     (c) => c.status !== "pago" && c.vencimento >= hoje && c.vencimento <= daquiA3Dias
   );
+  // Melhor esforço: se o CMOT estiver fora do ar ou mal configurado, segue sem a agenda cirúrgica.
+  const cirurgias = await listarCirurgiasDoDia(hoje).catch((err) => {
+    console.warn("[agendado] não consegui buscar cirurgias do CMOT:", err.message);
+    return [];
+  });
 
-  if (tarefas.length === 0 && contas.length === 0) return; // nada pra avisar hoje
+  if (tarefas.length === 0 && contas.length === 0 && cirurgias.length === 0) return; // nada pra avisar hoje
 
   const linhas = [`Bom dia, doutor! Resumo de ${hoje.split("-").reverse().join("/")}:`, ""];
+  if (cirurgias.length) {
+    linhas.push("Cirurgias de hoje (CMOT):");
+    for (const c of cirurgias) {
+      linhas.push(
+        `- ${c.horario || "sem horário"} · ${c.paciente} — ${c.procedimento} — ${c.hospital}${c.tipo === "URGENCIA" ? " — URGÊNCIA" : ""}`
+      );
+    }
+    linhas.push("");
+  }
   if (tarefas.length) {
     linhas.push("Tarefas de hoje:");
     for (const t of tarefas) linhas.push(`- ${t.titulo}${t.hora ? ` (${t.hora})` : ""}`);
@@ -71,11 +86,13 @@ async function rodarLembreteDiario() {
     }
   }
 
+  const totalItens = tarefas.length + contas.length + cirurgias.length;
+
   if (process.env.BACKUP_EMAIL_USER && process.env.BACKUP_EMAIL_PASS) {
     try {
       await enviarEmail({
         para: EMAIL_DESTINO,
-        assunto: `Bella — resumo do dia (${tarefas.length + contas.length} itens)`,
+        assunto: `Bella — resumo do dia (${totalItens} itens)`,
         texto: linhas.join("\n"),
       });
       console.log(`[agendado] Lembrete diário enviado por e-mail para ${EMAIL_DESTINO}`);
@@ -85,13 +102,11 @@ async function rodarLembreteDiario() {
   }
 
   if (pushAtivo()) {
-    const resumo =
-      tarefas.length && contas.length
-        ? `${tarefas.length} tarefa(s) e ${contas.length} conta(s) hoje`
-        : tarefas.length
-        ? `${tarefas.length} tarefa(s) hoje`
-        : `${contas.length} conta(s) vencendo`;
-    await enviarPush({ titulo: "Bella — resumo do dia", corpo: resumo, url: "/" });
+    const partes = [];
+    if (cirurgias.length) partes.push(`${cirurgias.length} cirurgia(s)`);
+    if (tarefas.length) partes.push(`${tarefas.length} tarefa(s)`);
+    if (contas.length) partes.push(`${contas.length} conta(s)`);
+    await enviarPush({ titulo: "Bella — resumo do dia", corpo: partes.join(" · "), url: "/" });
     console.log("[agendado] Lembrete diário enviado por notificação push.");
   }
 }

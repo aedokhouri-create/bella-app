@@ -39,6 +39,7 @@ import {
 const hojeChave = () => "nina_chat_" + new Date().toISOString().slice(0, 10);
 
 const CHAVE_VOZ_ESCOLHIDA = "bella_voz_escolhida";
+const CHAVE_TEMA = "bella_tema"; // "" (automático, segue o sistema) | "claro" | "escuro"
 
 // Alguns navegadores/vozes leem emoji em voz alta descrevendo a imagem
 // ("carinha feliz com bochecha rosada") em vez de ignorar — tira antes de falar.
@@ -191,11 +192,25 @@ export default function App() {
   const [backupAberto, setBackupAberto] = useState(false);
   const [vozAberto, setVozAberto] = useState(false);
   const [memoriaAberta, setMemoriaAberta] = useState(false);
+  const [tema, setTema] = useState(() => localStorage.getItem(CHAVE_TEMA) || "");
 
   useEffect(() => {
     recarregarTarefas();
     recarregarContas();
   }, []);
+
+  useEffect(() => {
+    if (tema) document.documentElement.dataset.tema = tema;
+    else delete document.documentElement.dataset.tema;
+  }, [tema]);
+
+  function alternarTema() {
+    // automático -> escuro -> claro -> automático
+    const proximo = tema === "" ? "escuro" : tema === "escuro" ? "claro" : "";
+    setTema(proximo);
+    if (proximo) localStorage.setItem(CHAVE_TEMA, proximo);
+    else localStorage.removeItem(CHAVE_TEMA);
+  }
 
   async function recarregarTarefas() {
     try {
@@ -235,6 +250,19 @@ export default function App() {
           </button>
           <button className="backup-btn" onClick={() => setBackupAberto(true)} title="Backup dos dados">
             💾
+          </button>
+          <button
+            className="backup-btn"
+            onClick={alternarTema}
+            title={
+              tema === "escuro"
+                ? "Tema: Escuro (toque pra mudar)"
+                : tema === "claro"
+                ? "Tema: Claro (toque pra mudar)"
+                : "Tema: Automático — segue o sistema (toque pra mudar)"
+            }
+          >
+            {tema === "escuro" ? "🌙" : tema === "claro" ? "☀️" : "🌗"}
           </button>
           <button
             className={"audio " + (ttsOn ? "on" : "")}
