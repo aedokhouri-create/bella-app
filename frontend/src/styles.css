@@ -490,6 +490,9 @@ input::placeholder, textarea::placeholder { color: var(--cinza); opacity: 1; }
   display: block; text-align: center; text-decoration: none; margin-top: 4px;
 }
 .separador { border: none; border-top: 1px solid var(--borda); margin: 6px 0; }
+.link-sobre { border: none; background: none; color: var(--teal); font-weight: 600; font-size: 14px; padding: 4px 0; text-align: left; }
+.lista-sobre { margin: 0; padding-left: 18px; font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
+.lista-sobre li { line-height: 1.4; }
 .lista-status-calendario { list-style: none; padding: 0; margin: 4px 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 
 /* Memória de longo prazo (modal) */

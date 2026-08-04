@@ -192,6 +192,7 @@ export default function App() {
   const [backupAberto, setBackupAberto] = useState(false);
   const [vozAberto, setVozAberto] = useState(false);
   const [memoriaAberta, setMemoriaAberta] = useState(false);
+  const [sobreAberto, setSobreAberto] = useState(false);
   const [tema, setTema] = useState(() => localStorage.getItem(CHAVE_TEMA) || "");
 
   useEffect(() => {
@@ -297,9 +298,18 @@ export default function App() {
         {aba === "contatos" && <Contatos />}
       </main>
 
-      {backupAberto && <PainelBackup fechar={() => setBackupAberto(false)} />}
+      {backupAberto && (
+        <PainelBackup
+          fechar={() => setBackupAberto(false)}
+          abrirSobre={() => {
+            setBackupAberto(false);
+            setSobreAberto(true);
+          }}
+        />
+      )}
       {vozAberto && <PainelVoz fechar={() => setVozAberto(false)} />}
       {memoriaAberta && <PainelMemoria fechar={() => setMemoriaAberta(false)} />}
+      {sobreAberto && <PainelSobre fechar={() => setSobreAberto(false)} />}
 
       <nav className="abas">
         <button className={aba === "conversa" ? "ativa" : ""} onClick={() => setAba("conversa")}>
@@ -1172,7 +1182,7 @@ function formatarData(iso) {
 }
 
 /* ---------------- Backup ---------------- */
-function PainelBackup({ fechar }) {
+function PainelBackup({ fechar, abrirSobre }) {
   const [info, setInfo] = useState(null);
   const [erro, setErro] = useState("");
   const [calStatus, setCalStatus] = useState(null);
@@ -1325,6 +1335,71 @@ function PainelBackup({ fechar }) {
             {pushTeste === "erro" && <p className="erro">Não consegui enviar o teste agora.</p>}
           </>
         )}
+
+        <hr className="separador" />
+        <button type="button" className="link-sobre" onClick={abrirSobre}>
+          ℹ️ Sobre a Bella / Ajuda
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Sobre / Ajuda ---------------- */
+function PainelSobre({ fechar }) {
+  return (
+    <div className="modal-fundo" onClick={fechar}>
+      <div className="modal-backup" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-topo">
+          <strong>ℹ️ Sobre a Bella</strong>
+          <button className="fechar" onClick={fechar}>
+            ✕
+          </button>
+        </div>
+
+        <p className="dica">
+          Assistente pessoal por voz e texto — organiza tarefas, contas, contatos e senhas,
+          lê fotos/PDFs de documentos, escreve relatórios médicos, cadastra cirurgias no CMOT
+          quando você pedir, e te avisa todo dia às 7h com o resumo do que vem por aí.
+        </p>
+
+        <hr className="separador" />
+
+        <strong>📱 Como instalar no celular</strong>
+        <p className="dica">
+          <strong>iPhone/iPad (Safari):</strong> abra a Bella no Safari → toque em Compartilhar
+          ⬆️ → "Adicionar à Tela de Início". Sem isso instalado, a notificação push não funciona.
+        </p>
+        <p className="dica">
+          <strong>Android (Chrome):</strong> abra no Chrome → ⋮ → "Instalar aplicativo".
+        </p>
+
+        <hr className="separador" />
+
+        <strong>⚙️ O que ela faz</strong>
+        <ul className="lista-sobre">
+          <li>💬 Conversa por voz ou texto, lembra o que você pede (tarefas, contas)</li>
+          <li>📅 Agenda em calendário — tarefas e contas por dia, marca concluído direto ali</li>
+          <li>📷 Lê foto ou PDF de documento (boleto vira conta, apólice vira lembrete de parcela)</li>
+          <li>🔒 Cofre de senhas com PIN, organizado em pastas, aceita anexar arquivos</li>
+          <li>📇 Contatos com WhatsApp pessoal/profissional — importa tudo de uma vez via .vcf</li>
+          <li>📝 Gera relatório/atestado/glosa/orçamento em .docx de verdade, sempre um rascunho</li>
+          <li>🏥 Cadastra ou consulta cirurgias no CMOT, só quando você pedir</li>
+          <li>🧠 Memória de longo prazo — guarda fatos que valem sempre, não só do dia</li>
+          <li>🗣️ Voz natural (Google) além da voz padrão do navegador</li>
+          <li>📆 Sincroniza automaticamente com o Calendário do iPhone (e Google, se conectado)</li>
+          <li>🔔 Notificação push e resumo diário por e-mail, mesmo com o app fechado</li>
+          <li>🌗 Modo escuro automático ou manual</li>
+        </ul>
+
+        <hr className="separador" />
+
+        <strong>💡 Dicas rápidas</strong>
+        <ul className="lista-sobre">
+          <li>Toque no microfone e fale — não precisa digitar</li>
+          <li>"Guarda isso" salva uma memória; "usa o modelo X" reaproveita um documento aprovado</li>
+          <li>O ícone 💾 no topo mostra backup, calendário e notificações</li>
+        </ul>
       </div>
     </div>
   );
