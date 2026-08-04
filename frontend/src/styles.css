@@ -53,12 +53,15 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { color-scheme: light dark; }
 html, body, #root { height: 100%; margin: 0; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
   color: var(--texto);
 }
+input, textarea, select { color: var(--texto); }
+input::placeholder, textarea::placeholder { color: var(--cinza); opacity: 1; }
 
 .app {
   display: flex;

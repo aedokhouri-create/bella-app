@@ -451,15 +451,20 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
     }
     const r = new SR();
     r.lang = "pt-BR";
-    r.interimResults = false;
+    r.interimResults = true; // mostra o texto sendo captado ao vivo, e serve de rede de segurança
     r.maxAlternatives = 1;
     let recebeuResultado = false;
+    let ultimoTexto = "";
     r.onstart = () => setOuvindo(true);
     r.onend = () => {
       setOuvindo(false);
-      // Alguns navegadores (iOS Safari) encerram sem soltar erro nem resultado
-      // quando não conseguem captar nada — avisa em vez de ficar em silêncio.
-      if (!recebeuResultado) {
+      if (recebeuResultado) return;
+      // Alguns navegadores (iOS Safari) encerram sem soltar o resultado final,
+      // mesmo já tendo captado algo (via interimResults) — usa isso como rede de segurança
+      // em vez de descartar tudo e dizer que não ouviu nada.
+      if (ultimoTexto.trim()) {
+        enviar(ultimoTexto);
+      } else {
         setMensagens((m) => [
           ...m,
           {
@@ -483,9 +488,15 @@ function Conversa({ ttsOn, aposCriarTarefa, aposCriarConta }) {
       ]);
     };
     r.onresult = (e) => {
-      recebeuResultado = true;
-      const t = e.results[0][0].transcript;
-      enviar(t);
+      const resultado = e.results[e.results.length - 1];
+      const t = resultado[0].transcript;
+      ultimoTexto = t;
+      setTexto(t); // feedback ao vivo do que está sendo captado
+      if (resultado.isFinal) {
+        recebeuResultado = true;
+        setTexto("");
+        enviar(t);
+      }
     };
     recogRef.current = r;
     r.start();
