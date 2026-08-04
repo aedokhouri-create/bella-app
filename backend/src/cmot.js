@@ -64,31 +64,68 @@ async function obterMedicoIdPadrao() {
   return eu.id;
 }
 
+// Tira acento, baixa a caixa e junta espaços duplicados/nas bordas — sem isso,
+// "João" != "Joao" e " Nome" != "Nome" viram pacientes duplicados por engano.
+// Compara dois procedimentos pelas palavras em comum — evita sobrescrever um pedido
+// diferente do mesmo paciente (ex.: segundo tempo cirúrgico) só porque bateu paciente + data.
+function procedimentosParecidos(a, b) {
+  const palavras = (s) =>
+    new Set(
+      semAcento(s)
+        .replace(/[^\p{L}\p{N} .-]/gu, " ")
+        .split(/\s+/)
+        .filter((w) => w.length > 3)
+    );
+  const pa = palavras(a || "");
+  const pb = palavras(b || "");
+  if (pa.size === 0 || pb.size === 0) return false;
+  let comuns = 0;
+  pa.forEach((w) => {
+    if (pb.has(w)) comuns++;
+  });
+  return comuns / Math.min(pa.size, pb.size) >= 0.4;
+}
+
 function semAcento(s) {
   return String(s || "")
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-// Mesma lógica de busca do Registro Rápido do CMOT: por CPF, ou nome
-// igual/contido/com todas as palavras batendo.
+// Distância de edição (Levenshtein) — só usada entre nomes já de tamanho parecido,
+// pra tolerar 1-2 letras trocadas (erro de digitação/OCR) sem juntar pessoas diferentes.
+function distanciaEdicao(a, b) {
+  const m = a.length,
+    n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+// Mesma lógica de busca do Registro Rápido do CMOT: por CPF, nome igual/contido/com
+// todas as palavras batendo, ou nome bem parecido (tolera erro de digitação/OCR).
 async function buscarOuCriarPaciente({ nome, cpf, nascimento, telefone, email }) {
   if (!nome || !nome.trim()) throw new Error("Nome do paciente é obrigatório para cadastrar no CMOT.");
   const pacientes = await cmotFetch("/pacientes");
   const nomeIA = semAcento(nome);
-  const palavrasIA = nomeIA.split(/\s+/).filter((w) => w.length > 2);
+  const palavrasIA = nomeIA.split(" ").filter((w) => w.length > 2);
   const existente = pacientes.find((p) => {
     if (cpf && p.cpf && p.cpf.replace(/\D/g, "") === String(cpf).replace(/\D/g, "")) return true;
     const reg = semAcento(p.nome);
     if (!reg || !nomeIA) return false; // nunca casar por substring vazia
-    return (
-      reg === nomeIA ||
-      reg.includes(nomeIA) ||
-      nomeIA.includes(reg) ||
-      (palavrasIA.length >= 2 && palavrasIA.every((w) => reg.includes(w)))
-    );
+    if (reg === nomeIA || reg.includes(nomeIA) || nomeIA.includes(reg)) return true;
+    if (palavrasIA.length >= 2 && palavrasIA.every((w) => reg.includes(w))) return true;
+    if (Math.abs(reg.length - nomeIA.length) <= 3 && distanciaEdicao(reg, nomeIA) <= 2) return true;
+    return false;
   });
   if (existente) return { paciente: existente, novo: false };
   const novo = await cmotFetch("/pacientes", {
@@ -116,7 +153,10 @@ async function registrarCirurgia({
     if (c.paciente_id !== pacienteId) return false;
     if (c.status !== "AGENDADA" && c.status !== "AUTORIZADA") return false;
     const dataC = c.data_prevista ? c.data_prevista.split("T")[0] : null;
-    return !dataC || dataC === hoje;
+    if (!(!dataC || dataC === hoje)) return false;
+    // Mesmo paciente pode ter mais de um pedido ativo (ex.: segundo tempo cirúrgico) —
+    // só trata como a mesma cirurgia se o procedimento também bater.
+    return procedimentosParecidos(c.procedimento, procedimento);
   });
 
   if (existente) {
