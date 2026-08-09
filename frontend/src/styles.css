@@ -337,7 +337,27 @@ input::placeholder, textarea::placeholder { color: var(--cinza); opacity: 1; }
 .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; font-size: 13px; color: var(--cinza); }
 .meta .cat { background: var(--chip-azul-bg); color: var(--chip-azul-fg); padding: 1px 8px; border-radius: 8px; }
 .meta .alta { background: var(--chip-vermelho-bg); color: var(--alta); padding: 1px 8px; border-radius: 8px; }
-.desc { margin-top: 4px; font-size: 14px; color: var(--cinza); }
+.desc {
+  margin-top: 4px; font-size: 14px; color: var(--cinza);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.grupo-tarefas { display: flex; flex-direction: column; gap: 10px; }
+.grupo-titulo {
+  font-size: 13px; font-weight: 700; color: var(--cinza); text-transform: uppercase;
+  letter-spacing: 0.04em; margin: 6px 2px 0;
+}
+.grupo-toggle { border: none; background: none; padding: 0; text-align: left; width: 100%; cursor: pointer; }
+.mais {
+  border: none; background: none; font-size: 20px; line-height: 1; padding: 4px 6px;
+  opacity: 0.6; flex: 0 0 auto; align-self: flex-start;
+}
+.acao-linha {
+  display: block; width: 100%; text-align: left; border: none; background: none;
+  padding: 14px 4px; font-size: 15px; border-bottom: 1px solid var(--borda); color: inherit;
+}
+.acao-linha:last-child { border-bottom: none; }
+.acao-linha.apagar-linha { color: var(--alta); }
 
 /* Cofre — tela de bloqueio */
 .cofre-lock { margin: auto; text-align: center; padding: 24px; max-width: 320px; }

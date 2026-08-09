@@ -776,8 +776,55 @@ function Agenda({ tarefas, recarregarTarefas, setTarefas, contas, recarregarCont
   );
 }
 
+function amanhaIso(hoje) {
+  const d = new Date(hoje + "T12:00:00");
+  d.setDate(d.getDate() + 1);
+  return isoDe(d);
+}
+
+function limiteSemanaIso(hoje) {
+  const d = new Date(hoje + "T12:00:00");
+  d.setDate(d.getDate() + 7);
+  return isoDe(d);
+}
+
+const ORDEM_PRIORIDADE = { alta: 0, media: 1, baixa: 2 };
+
+function ordenarTarefas(lista) {
+  return [...lista].sort((a, b) => {
+    const p = (ORDEM_PRIORIDADE[a.prioridade] ?? 1) - (ORDEM_PRIORIDADE[b.prioridade] ?? 1);
+    if (p !== 0) return p;
+    return (a.hora || "").localeCompare(b.hora || "");
+  });
+}
+
+// Separa as tarefas ativas em grupos por data, para não misturar tudo numa lista só.
+function agruparTarefas(ativas, hoje) {
+  const amanha = amanhaIso(hoje);
+  const limiteSemana = limiteSemanaIso(hoje);
+  const grupos = { atrasadas: [], hoje: [], amanha: [], semana: [], depois: [], semData: [] };
+  for (const t of ativas) {
+    if (!t.data) grupos.semData.push(t);
+    else if (t.data < hoje) grupos.atrasadas.push(t);
+    else if (t.data === hoje) grupos.hoje.push(t);
+    else if (t.data === amanha) grupos.amanha.push(t);
+    else if (t.data <= limiteSemana) grupos.semana.push(t);
+    else grupos.depois.push(t);
+  }
+  return [
+    { chave: "atrasadas", titulo: "⏰ Atrasadas", itens: ordenarTarefas(grupos.atrasadas) },
+    { chave: "hoje", titulo: "Hoje", itens: ordenarTarefas(grupos.hoje) },
+    { chave: "amanha", titulo: "Amanhã", itens: ordenarTarefas(grupos.amanha) },
+    { chave: "semana", titulo: "Esta semana", itens: ordenarTarefas(grupos.semana) },
+    { chave: "depois", titulo: "Mais tarde", itens: ordenarTarefas(grupos.depois) },
+    { chave: "semData", titulo: "Sem data", itens: ordenarTarefas(grupos.semData) },
+  ].filter((g) => g.itens.length > 0);
+}
+
 function ListaTarefas({ tarefas, recarregar, setTarefas }) {
   const [filtro, setFiltro] = useState("todas"); // hoje | todas
+  const [mostrarConcluidas, setMostrarConcluidas] = useState(false);
+  const [menuTarefa, setMenuTarefa] = useState(null);
 
   async function alternar(t) {
     const novo = t.status === "concluida" ? "pendente" : "concluida";
@@ -811,7 +858,34 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
   }
 
   const hoje = isoDe(new Date());
-  const visiveis = filtro === "hoje" ? tarefas.filter((t) => t.data === hoje) : tarefas;
+  const base = filtro === "hoje" ? tarefas.filter((t) => t.data === hoje) : tarefas;
+  const ativas = base.filter((t) => t.status !== "concluida");
+  const concluidas = base.filter((t) => t.status === "concluida");
+  const grupos =
+    filtro === "hoje"
+      ? [{ chave: "hoje", titulo: null, itens: ordenarTarefas(ativas) }]
+      : agruparTarefas(ativas, hoje);
+
+  function renderCartao(t) {
+    return (
+      <div key={t.id} className={"cartao prio-" + (t.prioridade || "media") + (t.status === "concluida" ? " feita" : "")}>
+        <button className="check" onClick={() => alternar(t)} title="Concluir">
+          {t.status === "concluida" ? "☑" : "☐"}
+        </button>
+        <div className="corpo">
+          <div className="titulo">{t.titulo}</div>
+          <div className="meta">
+            {t.data && <span>📅 {formatarData(t.data)}{t.hora ? ` · ${t.hora}` : ""}</span>}
+            {t.categoria && <span className="cat">{t.categoria}</span>}
+          </div>
+          {t.descricao && <div className="desc">{t.descricao}</div>}
+        </div>
+        <button className="mais" onClick={() => setMenuTarefa(t)} title="Mais ações">
+          ⋯
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="sub-painel">
@@ -824,7 +898,7 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
         </button>
       </div>
 
-      {visiveis.length === 0 ? (
+      {ativas.length === 0 && concluidas.length === 0 ? (
         <div className="vazio">
           {filtro === "hoje" ? (
             <p>Nada para hoje. 🎉</p>
@@ -837,43 +911,66 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
         </div>
       ) : (
         <div className="lista-tarefas">
-          {visiveis.map((t) => (
-            <div key={t.id} className={"cartao prio-" + (t.prioridade || "media") + (t.status === "concluida" ? " feita" : "")}>
-              <button className="check" onClick={() => alternar(t)} title="Concluir">
-                {t.status === "concluida" ? "☑" : "☐"}
-              </button>
-              <div className="corpo">
-                <div className="titulo">{t.titulo}</div>
-                <div className="meta">
-                  {t.data && <span>📅 {formatarData(t.data)}{t.hora ? ` · ${t.hora}` : ""}</span>}
-                  {t.categoria && <span className="cat">{t.categoria}</span>}
-                  {t.prioridade === "alta" && <span className="alta">alta</span>}
-                </div>
-                {t.descricao && <div className="desc">{t.descricao}</div>}
-              </div>
-              <div className="acoes">
-                {t.data && (
-                  <button
-                    className="add-calendario"
-                    onClick={() =>
-                      baixarICS({ titulo: t.titulo, data: t.data, hora: t.hora, descricao: t.descricao })
-                    }
-                    title="Adicionar ao Calendário do iPhone"
-                  >
-                    📅
-                  </button>
-                )}
-                {t.status !== "concluida" && (
-                  <button className="adiar" onClick={() => adiar(t)} title="Adiar 1 dia">
-                    💤
-                  </button>
-                )}
-                <button className="apagar" onClick={() => remover(t)} title="Apagar">
-                  🗑
-                </button>
-              </div>
+          {grupos.map((g) => (
+            <div key={g.chave} className="grupo-tarefas">
+              {g.titulo && <div className="grupo-titulo">{g.titulo}</div>}
+              {g.itens.map(renderCartao)}
             </div>
           ))}
+          {concluidas.length > 0 && (
+            <div className="grupo-tarefas">
+              <button className="grupo-titulo grupo-toggle" onClick={() => setMostrarConcluidas((v) => !v)}>
+                {mostrarConcluidas ? "▾" : "▸"} Concluídas ({concluidas.length})
+              </button>
+              {mostrarConcluidas && concluidas.map(renderCartao)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {menuTarefa && (
+        <div className="cal-sheet-fundo" onClick={() => setMenuTarefa(null)}>
+          <div className="cal-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="cal-sheet-alca" />
+            <div className="cal-lista-titulo">{menuTarefa.titulo}</div>
+            {menuTarefa.data && (
+              <button
+                className="acao-linha"
+                onClick={() => {
+                  baixarICS({
+                    titulo: menuTarefa.titulo,
+                    data: menuTarefa.data,
+                    hora: menuTarefa.hora,
+                    descricao: menuTarefa.descricao,
+                  });
+                  setMenuTarefa(null);
+                }}
+              >
+                📅 Adicionar ao Calendário do iPhone
+              </button>
+            )}
+            {menuTarefa.status !== "concluida" && (
+              <button
+                className="acao-linha"
+                onClick={() => {
+                  adiar(menuTarefa);
+                  setMenuTarefa(null);
+                }}
+              >
+                💤 Adiar para amanhã
+              </button>
+            )}
+            <button
+              className="acao-linha apagar-linha"
+              onClick={() => {
+                const alvo = menuTarefa;
+                setMenuTarefa(null);
+                remover(alvo);
+              }}
+            >
+              🗑 Apagar tarefa
+            </button>
+          </div>
         </div>
       )}
     </div>
