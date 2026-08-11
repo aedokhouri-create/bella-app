@@ -348,6 +348,10 @@ input::placeholder, textarea::placeholder { color: var(--cinza); opacity: 1; }
   border: 1px solid var(--borda); border-radius: 12px; padding: 14px 16px;
   font-size: 18px; text-align: center; letter-spacing: 4px; background: var(--card);
 }
+/* Mascara o PIN com bolinhas sem usar type="password" — evita que o iOS trate
+   o campo como senha de login e ofereça autofill/sugestão de senha forte do
+   Keychain, que substituía os dígitos digitados por um valor aleatório. */
+.form-pin input.pin-mascarado { -webkit-text-security: disc; text-security: disc; }
 .erro { color: var(--alta); font-size: 14px; }
 .btn-principal {
   background: var(--teal); color: #fff; border: none; border-radius: 12px;

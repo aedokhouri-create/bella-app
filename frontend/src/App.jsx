@@ -1760,18 +1760,30 @@ function Cofre() {
         </p>
         <form onSubmit={criar ? criarPin : desbloquear} className="form-pin">
           <input
-            type="password"
+            type="text"
+            className="pin-mascarado"
+            pattern="[0-9]*"
             inputMode="numeric"
             autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            data-lpignore="true"
             placeholder="PIN (mín. 4 dígitos)"
             value={entrada}
             onChange={(e) => setEntrada(e.target.value.replace(/\D/g, ""))}
           />
           {criar && (
             <input
-              type="password"
+              type="text"
+              className="pin-mascarado"
+              pattern="[0-9]*"
               inputMode="numeric"
               autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
+              data-lpignore="true"
               placeholder="Confirmar PIN"
               value={confirma}
               onChange={(e) => setConfirma(e.target.value.replace(/\D/g, ""))}
