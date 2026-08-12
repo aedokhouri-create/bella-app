@@ -316,6 +316,12 @@ input::placeholder, textarea::placeholder { color: var(--cinza); opacity: 1; }
   padding: 7px 16px; border-radius: 20px; font-size: 14px;
 }
 .filtro button.sel { background: var(--teal); color: #fff; border-color: var(--teal); font-weight: 600; }
+.atrasadas-bloco { padding: 0 14px; }
+.toggle-atrasadas {
+  width: 100%; text-align: left; border: 1px solid var(--borda); background: var(--card);
+  color: var(--cinza); padding: 9px 14px; border-radius: 12px; font-size: 14px; font-weight: 600;
+}
+.atrasadas-bloco .lista-tarefas { padding: 10px 0 0; overflow-y: visible; }
 .acoes { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
 .adiar { border: none; background: none; font-size: 18px; opacity: 0.7; padding: 0; }
 .add-calendario { border: none; background: none; font-size: 18px; opacity: 0.7; padding: 0; }
@@ -400,7 +406,7 @@ input::placeholder, textarea::placeholder { color: var(--cinza); opacity: 1; }
 .nota-corpo { flex: 1; min-width: 0; }
 .nota-corpo .desc { white-space: pre-wrap; font-size: 14px; }
 .nota-acoes { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
-.copiar, .nota-acoes .apagar { border: none; background: none; font-size: 18px; padding: 0; opacity: 0.7; }
+.copiar, .editar, .nota-acoes .apagar { border: none; background: none; font-size: 18px; padding: 0; opacity: 0.7; }
 
 /* Arquivos anexados a uma nota do cofre */
 .arquivos-nota {

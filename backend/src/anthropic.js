@@ -45,6 +45,14 @@ const ferramentaCriarTarefa = {
         type: "string",
         description: "Categoria curta: trabalho, pessoal, familia, saude, financeiro...",
       },
+      recorrencia: {
+        type: "string",
+        enum: ["mensal"],
+        description:
+          "Preencha com 'mensal' quando ele pedir algo que se repete todo mês (ex.: 'todo dia 10', " +
+          "'todo início de mês', 'toda vez que fechar o mês'). A tarefa volta sozinha no mês seguinte, " +
+          "no mesmo dia — ele não precisa pedir de novo. Deixe vazio para tarefas de uma vez só.",
+      },
     },
     required: ["titulo"],
   },
@@ -363,9 +371,13 @@ function sistema(memorias = [], modelos = []) {
     `Hoje é ${dataHoje}, ${horaAgora} (fuso horário da Bahia). ` +
     "Quando ele pedir para lembrar, agendar ou anotar algo, use a ferramenta criar_tarefa " +
     "— não precisa avisar que vai usar uma ferramenta, apenas aja. Se faltar hora ou data, " +
-    "tudo bem, crie mesmo assim com o que tiver. Depois de criar, confirme em uma frase " +
-    "curta e natural, tipo o que você diria de verdade (ex.: 'Anotado, doutor — te aviso " +
-    "amanhã de manhã' em vez de 'Tarefa criada com sucesso').\n\n" +
+    "tudo bem, crie mesmo assim com o que tiver. Se ele disser que é algo que se repete " +
+    "todo mês (ex.: 'todo dia 10', 'todo início de mês', 'sempre que fechar o mês'), " +
+    "preencha o campo recorrencia com 'mensal' — a tarefa volta sozinha no mês seguinte, " +
+    "sem ele precisar pedir de novo. Depois de criar, confirme em uma frase curta e " +
+    "natural, tipo o que você diria de verdade (ex.: 'Anotado, doutor — te aviso amanhã " +
+    "de manhã' ou, se for recorrente, 'Anotado — vou te lembrar todo dia 10' em vez de " +
+    "'Tarefa criada com sucesso').\n\n" +
     "Quando ele pedir para mandar/escrever mensagem para alguém no WhatsApp, use a " +
     "ferramenta enviar_whatsapp. Você NUNCA envia a mensagem de verdade — apenas deixa " +
     "pronta para ele abrir e conferir. Nunca diga 'enviei' ou 'mandei' — diga 'deixei " +

@@ -56,6 +56,13 @@ export const cofreCriarNota = (pin, nota) =>
     body: JSON.stringify(nota),
   }).then(json);
 
+export const cofreAtualizarNota = (pin, id, nota) =>
+  fetch(`/api/cofre/notas/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "x-cofre-pin": pin },
+    body: JSON.stringify(nota),
+  }).then(json);
+
 export const cofreApagarNota = (pin, id) =>
   fetch(`/api/cofre/notas/${id}`, { method: "DELETE", headers: { "x-cofre-pin": pin } }).then(json);
 

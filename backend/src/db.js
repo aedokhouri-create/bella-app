@@ -101,6 +101,12 @@ for (const tabela of ["tarefas", "contas_pagar"]) {
   }
 }
 
+// Migração segura: tarefas recorrentes (ex.: "mensal" — repete todo mês, no mesmo dia).
+{
+  const cols = db.prepare("PRAGMA table_info(tarefas)").all().map((c) => c.name);
+  if (!cols.includes("recorrencia")) db.exec("ALTER TABLE tarefas ADD COLUMN recorrencia TEXT");
+}
+
 /* ---------------- Config (chave/valor) ---------------- */
 export function getConfig(chave) {
   const row = db.prepare("SELECT valor FROM config WHERE chave = ?").get(chave);
@@ -234,8 +240,8 @@ export function buscarTarefa(id) {
 export function criarTarefa(t) {
   const info = db
     .prepare(
-      `INSERT INTO tarefas (titulo, descricao, data, hora, prioridade, categoria)
-       VALUES (@titulo, @descricao, @data, @hora, @prioridade, @categoria)`
+      `INSERT INTO tarefas (titulo, descricao, data, hora, prioridade, categoria, recorrencia)
+       VALUES (@titulo, @descricao, @data, @hora, @prioridade, @categoria, @recorrencia)`
     )
     .run({
       titulo: t.titulo,
@@ -244,12 +250,13 @@ export function criarTarefa(t) {
       hora: t.hora || null,
       prioridade: t.prioridade || "media",
       categoria: t.categoria || null,
+      recorrencia: t.recorrencia || null,
     });
   return db.prepare("SELECT * FROM tarefas WHERE id = ?").get(info.lastInsertRowid);
 }
 
 export function atualizarTarefa(id, campos) {
-  const permitidos = ["titulo", "descricao", "data", "hora", "prioridade", "categoria", "status"];
+  const permitidos = ["titulo", "descricao", "data", "hora", "prioridade", "categoria", "status", "recorrencia"];
   const sets = [];
   const valores = {};
   for (const c of permitidos) {
@@ -262,6 +269,32 @@ export function atualizarTarefa(id, campos) {
   valores.id = id;
   db.prepare(`UPDATE tarefas SET ${sets.join(", ")} WHERE id = @id`).run(valores);
   return db.prepare("SELECT * FROM tarefas WHERE id = ?").get(id);
+}
+
+// Empurra a data de uma tarefa recorrente alguns meses pra frente, mantendo o
+// mesmo dia (ou o último dia do mês, se o mês novo for mais curto — ex.: dia 31 em fevereiro).
+function somarMeses(iso, meses) {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  const alvo = new Date(Date.UTC(ano, mes - 1 + meses, 1));
+  const ultimoDiaDoMes = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate();
+  alvo.setUTCDate(Math.min(dia, ultimoDiaDoMes));
+  return alvo.toISOString().slice(0, 10);
+}
+
+// Tarefas com recorrencia='mensal' cuja data já passou viram a próxima ocorrência
+// (mesmo dia, no mês seguinte) e voltam para "pendente" — assim elas nunca acumulam
+// cópias antigas na lista nem ficam esquecidas em meses anteriores. Chamada 1x por dia.
+export function avancarTarefasRecorrentes(hojeISO) {
+  const candidatas = db
+    .prepare("SELECT * FROM tarefas WHERE recorrencia = 'mensal' AND data IS NOT NULL AND data <> ''")
+    .all();
+  for (const t of candidatas) {
+    let novaData = t.data;
+    while (novaData < hojeISO) novaData = somarMeses(novaData, 1);
+    if (novaData !== t.data) {
+      db.prepare("UPDATE tarefas SET data = ?, status = 'pendente' WHERE id = ?").run(novaData, t.id);
+    }
+  }
 }
 
 export function apagarTarefa(id) {

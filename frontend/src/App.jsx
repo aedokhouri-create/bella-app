@@ -11,6 +11,7 @@ import {
   cofreVerificar,
   cofreListarNotas,
   cofreCriarNota,
+  cofreAtualizarNota,
   cofreApagarNota,
   cofreListarArquivos,
   cofreAnexarArquivo,
@@ -778,6 +779,7 @@ function Agenda({ tarefas, recarregarTarefas, setTarefas, contas, recarregarCont
 
 function ListaTarefas({ tarefas, recarregar, setTarefas }) {
   const [filtro, setFiltro] = useState("todas"); // hoje | todas
+  const [mostrarAtrasadas, setMostrarAtrasadas] = useState(false);
 
   async function alternar(t) {
     const novo = t.status === "concluida" ? "pendente" : "concluida";
@@ -811,7 +813,54 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
   }
 
   const hoje = isoDe(new Date());
-  const visiveis = filtro === "hoje" ? tarefas.filter((t) => t.data === hoje) : tarefas;
+  const inicioMes = hoje.slice(0, 8) + "01"; // YYYY-MM-01
+
+  // Tarefas pendentes com data de meses anteriores viram "Atrasadas": ficam fora da
+  // lista principal (que some poluída com coisa velha) mas continuam acessíveis.
+  const atrasadas = tarefas.filter((t) => t.status !== "concluida" && t.data && t.data < inicioMes);
+  const idsAtrasadas = new Set(atrasadas.map((t) => t.id));
+  const restantes = tarefas.filter((t) => !idsAtrasadas.has(t.id));
+  const visiveis = filtro === "hoje" ? restantes.filter((t) => t.data === hoje) : restantes;
+
+  function cartaoTarefa(t) {
+    return (
+      <div key={t.id} className={"cartao prio-" + (t.prioridade || "media") + (t.status === "concluida" ? " feita" : "")}>
+        <button className="check" onClick={() => alternar(t)} title="Concluir">
+          {t.status === "concluida" ? "☑" : "☐"}
+        </button>
+        <div className="corpo">
+          <div className="titulo">{t.recorrencia ? "🔁 " : ""}{t.titulo}</div>
+          <div className="meta">
+            {t.data && <span>📅 {formatarData(t.data)}{t.hora ? ` · ${t.hora}` : ""}</span>}
+            {t.categoria && <span className="cat">{t.categoria}</span>}
+            {t.prioridade === "alta" && <span className="alta">alta</span>}
+          </div>
+          {t.descricao && <div className="desc">{t.descricao}</div>}
+        </div>
+        <div className="acoes">
+          {t.data && (
+            <button
+              className="add-calendario"
+              onClick={() =>
+                baixarICS({ titulo: t.titulo, data: t.data, hora: t.hora, descricao: t.descricao })
+              }
+              title="Adicionar ao Calendário do iPhone"
+            >
+              📅
+            </button>
+          )}
+          {t.status !== "concluida" && (
+            <button className="adiar" onClick={() => adiar(t)} title="Adiar 1 dia">
+              💤
+            </button>
+          )}
+          <button className="apagar" onClick={() => remover(t)} title="Apagar">
+            🗑
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="sub-painel">
@@ -824,10 +873,21 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
         </button>
       </div>
 
+      {filtro === "todas" && atrasadas.length > 0 && (
+        <div className="atrasadas-bloco">
+          <button className="toggle-atrasadas" onClick={() => setMostrarAtrasadas((v) => !v)}>
+            {mostrarAtrasadas ? "▾" : "▸"} ⚠️ Atrasadas ({atrasadas.length})
+          </button>
+          {mostrarAtrasadas && <div className="lista-tarefas">{atrasadas.map(cartaoTarefa)}</div>}
+        </div>
+      )}
+
       {visiveis.length === 0 ? (
         <div className="vazio">
           {filtro === "hoje" ? (
             <p>Nada para hoje. 🎉</p>
+          ) : atrasadas.length > 0 ? (
+            <p>Nada por aqui — veja as atrasadas acima.</p>
           ) : (
             <>
               <p>Nenhuma tarefa ainda.</p>
@@ -836,45 +896,7 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
           )}
         </div>
       ) : (
-        <div className="lista-tarefas">
-          {visiveis.map((t) => (
-            <div key={t.id} className={"cartao prio-" + (t.prioridade || "media") + (t.status === "concluida" ? " feita" : "")}>
-              <button className="check" onClick={() => alternar(t)} title="Concluir">
-                {t.status === "concluida" ? "☑" : "☐"}
-              </button>
-              <div className="corpo">
-                <div className="titulo">{t.titulo}</div>
-                <div className="meta">
-                  {t.data && <span>📅 {formatarData(t.data)}{t.hora ? ` · ${t.hora}` : ""}</span>}
-                  {t.categoria && <span className="cat">{t.categoria}</span>}
-                  {t.prioridade === "alta" && <span className="alta">alta</span>}
-                </div>
-                {t.descricao && <div className="desc">{t.descricao}</div>}
-              </div>
-              <div className="acoes">
-                {t.data && (
-                  <button
-                    className="add-calendario"
-                    onClick={() =>
-                      baixarICS({ titulo: t.titulo, data: t.data, hora: t.hora, descricao: t.descricao })
-                    }
-                    title="Adicionar ao Calendário do iPhone"
-                  >
-                    📅
-                  </button>
-                )}
-                {t.status !== "concluida" && (
-                  <button className="adiar" onClick={() => adiar(t)} title="Adiar 1 dia">
-                    💤
-                  </button>
-                )}
-                <button className="apagar" onClick={() => remover(t)} title="Apagar">
-                  🗑
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <div className="lista-tarefas">{visiveis.map(cartaoTarefa)}</div>
       )}
     </div>
   );
@@ -1662,6 +1684,7 @@ function Cofre() {
   const [busca, setBusca] = useState("");
   const [categoriaAberta, setCategoriaAberta] = useState(null); // null = grade de pastas
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [editandoId, setEditandoId] = useState(null); // null = criando nova nota
 
   useEffect(() => {
     cofreStatus()
@@ -1711,25 +1734,53 @@ function Cofre() {
     setModo("bloqueado");
   }
 
-  async function adicionarNota(e) {
+  async function salvarNota(e) {
     e.preventDefault();
     if (!novoTitulo.trim()) return;
-    const nota = await cofreCriarNota(pin, {
+    const dados = {
       titulo: novoTitulo.trim(),
       conteudo: novoConteudo.trim(),
       categoria: novaCategoria || null,
-    });
-    setNotas((n) => [nota, ...n]);
+    };
+    if (editandoId) {
+      const atualizada = await cofreAtualizarNota(pin, editandoId, dados);
+      setNotas((n) => n.map((x) => (x.id === editandoId ? { ...x, ...atualizada } : x)));
+    } else {
+      const nota = await cofreCriarNota(pin, dados);
+      setNotas((n) => [nota, ...n]);
+    }
+    fecharForm();
+  }
+
+  function iniciarEdicao(n) {
+    setEditandoId(n.id);
+    setNovoTitulo(n.titulo || "");
+    setNovoConteudo(n.conteudo || "");
+    setNovaCategoria(n.categoria || "");
+    setMostrarForm(true);
+  }
+
+  function fecharForm() {
     setNovoTitulo("");
     setNovoConteudo("");
     setNovaCategoria(categoriaAberta && categoriaAberta !== "Outros" ? categoriaAberta : "");
+    setEditandoId(null);
     setMostrarForm(false);
+  }
+
+  function abrirNovaNota() {
+    setEditandoId(null);
+    setNovoTitulo("");
+    setNovoConteudo("");
+    setNovaCategoria(categoriaAberta && categoriaAberta !== "Outros" ? categoriaAberta : "");
+    setMostrarForm(true);
   }
 
   function abrirCategoria(cat) {
     setCategoriaAberta(cat);
     setNovaCategoria(cat === "Outros" ? "" : cat);
     setMostrarForm(false);
+    setEditandoId(null);
     setBusca("");
   }
 
@@ -1737,6 +1788,7 @@ function Cofre() {
     setCategoriaAberta(null);
     setNovaCategoria("");
     setMostrarForm(false);
+    setEditandoId(null);
   }
 
   async function removerNota(id) {
@@ -1820,7 +1872,7 @@ function Cofre() {
   }
 
   const formNota = (
-    <form className="form-nota" onSubmit={adicionarNota}>
+    <form className="form-nota" onSubmit={salvarNota}>
       <input
         placeholder="Título (ex.: Banco do Brasil)"
         value={novoTitulo}
@@ -1840,7 +1892,7 @@ function Cofre() {
         ))}
       </select>
       <button type="submit" className="btn-principal" disabled={!novoTitulo.trim()}>
-        + Guardar
+        {editandoId ? "Salvar alterações" : "+ Guardar"}
       </button>
     </form>
   );
@@ -1855,6 +1907,7 @@ function Cofre() {
           </div>
           <div className="nota-acoes">
             <button className="copiar" onClick={() => copiar(n)} title="Copiar">📋</button>
+            <button className="editar" onClick={() => iniciarEdicao(n)} title="Editar">✏️</button>
             <button className="apagar" onClick={() => removerNota(n.id)} title="Apagar">🗑</button>
           </div>
         </div>
@@ -1893,7 +1946,7 @@ function Cofre() {
         </div>
       ) : categoriaAberta === null ? (
         <>
-          <button type="button" className="btn-nova-nota" onClick={() => setMostrarForm((v) => !v)}>
+          <button type="button" className="btn-nova-nota" onClick={mostrarForm ? fecharForm : abrirNovaNota}>
             {mostrarForm ? "Cancelar" : "+ Nova nota"}
           </button>
           {mostrarForm && formNota}
@@ -1917,7 +1970,7 @@ function Cofre() {
       ) : (
         <>
           <div className="categoria-titulo">{separarIconeNome(categoriaAberta).icone} {separarIconeNome(categoriaAberta).nome}</div>
-          <button type="button" className="btn-nova-nota" onClick={() => setMostrarForm((v) => !v)}>
+          <button type="button" className="btn-nova-nota" onClick={mostrarForm ? fecharForm : abrirNovaNota}>
             {mostrarForm ? "Cancelar" : "+ Nova nota aqui"}
           </button>
           {mostrarForm && formNota}

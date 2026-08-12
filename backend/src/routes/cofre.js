@@ -151,6 +151,18 @@ router.post("/notas", exigePin, (req, res) => {
   res.status(201).json({ ...nota, titulo, conteudo: conteudo || null });
 });
 
+router.put("/notas/:id", exigePin, (req, res) => {
+  const { titulo, conteudo, categoria } = req.body || {};
+  if (!titulo || !titulo.trim()) return res.status(400).json({ erro: "O título é obrigatório." });
+  const chave = chaveAtual(req.cofrePin);
+  atualizarNota(Number(req.params.id), {
+    titulo: criptografar(chave, titulo),
+    conteudo: criptografar(chave, conteudo),
+    categoria: categoria || null,
+  });
+  res.json({ id: Number(req.params.id), titulo, conteudo: conteudo || null, categoria: categoria || null });
+});
+
 router.delete("/notas/:id", exigePin, (req, res) => {
   apagarNota(Number(req.params.id));
   res.status(204).end();
