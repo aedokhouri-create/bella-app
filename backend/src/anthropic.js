@@ -47,11 +47,13 @@ const ferramentaCriarTarefa = {
       },
       recorrencia: {
         type: "string",
-        enum: ["mensal"],
+        enum: ["mensal", "semanal"],
         description:
           "Preencha com 'mensal' quando ele pedir algo que se repete todo mês (ex.: 'todo dia 10', " +
-          "'todo início de mês', 'toda vez que fechar o mês'). A tarefa volta sozinha no mês seguinte, " +
-          "no mesmo dia — ele não precisa pedir de novo. Deixe vazio para tarefas de uma vez só.",
+          "'todo início de mês', 'toda vez que fechar o mês'), ou 'semanal' quando for toda semana " +
+          "(ex.: 'toda sexta', 'toda semana'). A tarefa volta sozinha na próxima ocorrência " +
+          "(mesmo dia do mês, ou 7 dias depois) — ele não precisa pedir de novo. Deixe vazio para " +
+          "tarefas de uma vez só.",
       },
     },
     required: ["titulo"],
@@ -373,8 +375,9 @@ function sistema(memorias = [], modelos = []) {
     "— não precisa avisar que vai usar uma ferramenta, apenas aja. Se faltar hora ou data, " +
     "tudo bem, crie mesmo assim com o que tiver. Se ele disser que é algo que se repete " +
     "todo mês (ex.: 'todo dia 10', 'todo início de mês', 'sempre que fechar o mês'), " +
-    "preencha o campo recorrencia com 'mensal' — a tarefa volta sozinha no mês seguinte, " +
-    "sem ele precisar pedir de novo. Depois de criar, confirme em uma frase curta e " +
+    "preencha o campo recorrencia com 'mensal'; se for toda semana (ex.: 'toda sexta'), " +
+    "use 'semanal' — a tarefa volta sozinha na próxima ocorrência, sem ele precisar " +
+    "pedir de novo. Depois de criar, confirme em uma frase curta e " +
     "natural, tipo o que você diria de verdade (ex.: 'Anotado, doutor — te aviso amanhã " +
     "de manhã' ou, se for recorrente, 'Anotado — vou te lembrar todo dia 10' em vez de " +
     "'Tarefa criada com sucesso').\n\n" +

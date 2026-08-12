@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { enviarEmail } from "./email.js";
 import { enviarPush, pushAtivo } from "./push.js";
-import { listarTarefas, listarContas, avancarTarefasRecorrentes } from "./db.js";
+import { listarTarefas, listarContas, avancarTarefasRecorrentes, apagarTarefasConcluidasAntigas } from "./db.js";
 import { listarCirurgiasDoDia } from "./cmot.js";
 
 const DATA_DIR = process.env.DATA_DIR || "./data";
@@ -113,9 +113,14 @@ async function rodarLembreteDiario() {
 
 export function iniciarTarefasAgendadas() {
   // Roda sempre (não depende de e-mail/push configurados) — sem isso, tarefas
-  // marcadas como recorrentes ficariam paradas no mês em que foram criadas.
-  avancarTarefasRecorrentes(isoDeHoje());
-  cron.schedule("5 0 * * *", () => avancarTarefasRecorrentes(isoDeHoje()), { timezone: FUSO });
+  // marcadas como recorrentes ficariam paradas no mês em que foram criadas, e
+  // tarefas concluídas antigas ficariam acumulando pra sempre.
+  function manutencaoDiaria() {
+    avancarTarefasRecorrentes(isoDeHoje());
+    apagarTarefasConcluidasAntigas(isoDeHoje());
+  }
+  manutencaoDiaria();
+  cron.schedule("5 0 * * *", manutencaoDiaria, { timezone: FUSO });
 
   const emailAtivo = process.env.BACKUP_EMAIL_USER && process.env.BACKUP_EMAIL_PASS;
 

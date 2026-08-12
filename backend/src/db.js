@@ -280,21 +280,48 @@ function somarMeses(iso, meses) {
   alvo.setUTCDate(Math.min(dia, ultimoDiaDoMes));
   return alvo.toISOString().slice(0, 10);
 }
+function somarDias(iso, dias) {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  const alvo = new Date(Date.UTC(ano, mes - 1, dia));
+  alvo.setUTCDate(alvo.getUTCDate() + dias);
+  return alvo.toISOString().slice(0, 10);
+}
+function proximaOcorrencia(iso, recorrencia) {
+  return recorrencia === "semanal" ? somarDias(iso, 7) : somarMeses(iso, 1);
+}
 
-// Tarefas com recorrencia='mensal' cuja data já passou viram a próxima ocorrência
-// (mesmo dia, no mês seguinte) e voltam para "pendente" — assim elas nunca acumulam
-// cópias antigas na lista nem ficam esquecidas em meses anteriores. Chamada 1x por dia.
+// Tarefas recorrentes ('mensal' ou 'semanal') cuja data já passou viram a próxima
+// ocorrência (mesmo dia do mês, ou 7 dias depois) e voltam para "pendente" — assim
+// elas nunca acumulam cópias antigas na lista nem ficam esquecidas em datas passadas.
+// Chamada 1x por dia.
 export function avancarTarefasRecorrentes(hojeISO) {
   const candidatas = db
-    .prepare("SELECT * FROM tarefas WHERE recorrencia = 'mensal' AND data IS NOT NULL AND data <> ''")
+    .prepare("SELECT * FROM tarefas WHERE recorrencia IN ('mensal', 'semanal') AND data IS NOT NULL AND data <> ''")
     .all();
   for (const t of candidatas) {
     let novaData = t.data;
-    while (novaData < hojeISO) novaData = somarMeses(novaData, 1);
+    while (novaData < hojeISO) novaData = proximaOcorrencia(novaData, t.recorrencia);
     if (novaData !== t.data) {
       db.prepare("UPDATE tarefas SET data = ?, status = 'pendente' WHERE id = ?").run(novaData, t.id);
     }
   }
+}
+
+// Limpa tarefas concluídas há muito tempo (padrão 30 dias), pra não acumular pra
+// sempre nem no banco nem na lista. Usa a data da tarefa; sem data, usa quando foi criada.
+export function apagarTarefasConcluidasAntigas(hojeISO, diasLimite = 30) {
+  const limite = somarDias(hojeISO, -diasLimite);
+  const alvo = db
+    .prepare(
+      `SELECT id FROM tarefas WHERE status = 'concluida' AND (
+         (data IS NOT NULL AND data <> '' AND data < @limite) OR
+         ((data IS NULL OR data = '') AND date(criado_em) < @limite)
+       )`
+    )
+    .all({ limite });
+  const apagar = db.prepare("DELETE FROM tarefas WHERE id = ?");
+  for (const t of alvo) apagar.run(t.id);
+  return alvo.length;
 }
 
 export function apagarTarefa(id) {

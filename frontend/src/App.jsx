@@ -777,9 +777,48 @@ function Agenda({ tarefas, recarregarTarefas, setTarefas, contas, recarregarCont
   );
 }
 
+const ORDEM_GRUPOS_TAREFAS = ["Hoje", "Amanhã", "Esta semana", "Mais tarde", "Sem data", "Concluídas"];
+
 function ListaTarefas({ tarefas, recarregar, setTarefas }) {
   const [filtro, setFiltro] = useState("todas"); // hoje | todas
   const [mostrarAtrasadas, setMostrarAtrasadas] = useState(false);
+  const [editandoId, setEditandoId] = useState(null);
+  const [edTitulo, setEdTitulo] = useState("");
+  const [edData, setEdData] = useState("");
+  const [edHora, setEdHora] = useState("");
+  const [edCategoria, setEdCategoria] = useState("");
+  const [edPrioridade, setEdPrioridade] = useState("media");
+
+  function iniciarEdicao(t) {
+    setEditandoId(t.id);
+    setEdTitulo(t.titulo || "");
+    setEdData(t.data || "");
+    setEdHora(t.hora || "");
+    setEdCategoria(t.categoria || "");
+    setEdPrioridade(t.prioridade || "media");
+  }
+  function cancelarEdicao() {
+    setEditandoId(null);
+  }
+  async function salvarEdicao(e) {
+    e.preventDefault();
+    if (!edTitulo.trim()) return;
+    const campos = {
+      titulo: edTitulo.trim(),
+      data: edData || null,
+      hora: edHora || null,
+      categoria: edCategoria.trim() || null,
+      prioridade: edPrioridade,
+    };
+    const id = editandoId;
+    setTarefas((lista) => lista.map((x) => (x.id === id ? { ...x, ...campos } : x)));
+    setEditandoId(null);
+    try {
+      await atualizarTarefa(id, campos);
+    } finally {
+      recarregar();
+    }
+  }
 
   async function alternar(t) {
     const novo = t.status === "concluida" ? "pendente" : "concluida";
@@ -815,6 +854,15 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
   const hoje = isoDe(new Date());
   const inicioMes = hoje.slice(0, 8) + "01"; // YYYY-MM-01
 
+  const amanhaDate = new Date(hoje + "T12:00:00");
+  amanhaDate.setDate(amanhaDate.getDate() + 1);
+  const amanha = isoDe(amanhaDate);
+  const fimSemanaDate = new Date(hoje + "T12:00:00");
+  fimSemanaDate.setDate(fimSemanaDate.getDate() + 7);
+  const fimSemana = isoDe(fimSemanaDate);
+
+  const pendentesHoje = tarefas.filter((t) => t.data === hoje && t.status !== "concluida").length;
+
   // Tarefas pendentes com data de meses anteriores viram "Atrasadas": ficam fora da
   // lista principal (que some poluída com coisa velha) mas continuam acessíveis.
   const atrasadas = tarefas.filter((t) => t.status !== "concluida" && t.data && t.data < inicioMes);
@@ -822,7 +870,54 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
   const restantes = tarefas.filter((t) => !idsAtrasadas.has(t.id));
   const visiveis = filtro === "hoje" ? restantes.filter((t) => t.data === hoje) : restantes;
 
+  function grupoDe(t) {
+    if (!t.data) return "Sem data";
+    if (t.status === "concluida" && t.data < hoje) return "Concluídas";
+    if (t.data === hoje) return "Hoje";
+    if (t.data === amanha) return "Amanhã";
+    if (t.data < fimSemana) return "Esta semana";
+    return "Mais tarde";
+  }
+
+  const grupos = {};
+  if (filtro === "todas") {
+    for (const t of visiveis) {
+      (grupos[grupoDe(t)] ||= []).push(t);
+    }
+  }
+
   function cartaoTarefa(t) {
+    if (editandoId === t.id) {
+      return (
+        <form key={t.id} className="form-nota cartao-edicao" onSubmit={salvarEdicao}>
+          <input value={edTitulo} onChange={(e) => setEdTitulo(e.target.value)} autoFocus placeholder="Título" />
+          <div className="linha-conta">
+            <input type="date" value={edData} onChange={(e) => setEdData(e.target.value)} />
+            <input type="time" value={edHora} onChange={(e) => setEdHora(e.target.value)} />
+          </div>
+          <div className="linha-conta">
+            <input
+              value={edCategoria}
+              onChange={(e) => setEdCategoria(e.target.value)}
+              placeholder="Categoria (opcional)"
+            />
+            <select value={edPrioridade} onChange={(e) => setEdPrioridade(e.target.value)}>
+              <option value="baixa">Prioridade baixa</option>
+              <option value="media">Prioridade média</option>
+              <option value="alta">Prioridade alta</option>
+            </select>
+          </div>
+          <div className="linha-conta">
+            <button type="submit" className="btn-principal" disabled={!edTitulo.trim()}>
+              Salvar
+            </button>
+            <button type="button" className="btn-cancelar" onClick={cancelarEdicao}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      );
+    }
     return (
       <div key={t.id} className={"cartao prio-" + (t.prioridade || "media") + (t.status === "concluida" ? " feita" : "")}>
         <button className="check" onClick={() => alternar(t)} title="Concluir">
@@ -849,6 +944,9 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
               📅
             </button>
           )}
+          <button className="editar" onClick={() => iniciarEdicao(t)} title="Editar">
+            ✏️
+          </button>
           {t.status !== "concluida" && (
             <button className="adiar" onClick={() => adiar(t)} title="Adiar 1 dia">
               💤
@@ -873,6 +971,10 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
         </button>
       </div>
 
+      <div className="contador-tarefas">
+        {pendentesHoje > 0 ? `${pendentesHoje} pendente${pendentesHoje === 1 ? "" : "s"} hoje` : "Tudo em dia por hoje 🎉"}
+      </div>
+
       {filtro === "todas" && atrasadas.length > 0 && (
         <div className="atrasadas-bloco">
           <button className="toggle-atrasadas" onClick={() => setMostrarAtrasadas((v) => !v)}>
@@ -895,6 +997,15 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
             </>
           )}
         </div>
+      ) : filtro === "todas" ? (
+        <>
+          {ORDEM_GRUPOS_TAREFAS.filter((g) => grupos[g]?.length).map((g) => (
+            <div key={g} className="grupo-tarefas">
+              <div className="grupo-titulo">{g}</div>
+              <div className="lista-tarefas">{grupos[g].map(cartaoTarefa)}</div>
+            </div>
+          ))}
+        </>
       ) : (
         <div className="lista-tarefas">{visiveis.map(cartaoTarefa)}</div>
       )}
