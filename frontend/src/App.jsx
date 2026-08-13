@@ -777,11 +777,12 @@ function Agenda({ tarefas, recarregarTarefas, setTarefas, contas, recarregarCont
   );
 }
 
-const ORDEM_GRUPOS_TAREFAS = ["Hoje", "Amanhã", "Esta semana", "Mais tarde", "Sem data", "Concluídas"];
+const ORDEM_GRUPOS_TAREFAS = ["Hoje", "Amanhã", "Esta semana", "Mais tarde", "Sem data"];
 
 function ListaTarefas({ tarefas, recarregar, setTarefas }) {
   const [filtro, setFiltro] = useState("todas"); // hoje | todas
   const [mostrarAtrasadas, setMostrarAtrasadas] = useState(false);
+  const [mostrarConcluidas, setMostrarConcluidas] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
   const [edTitulo, setEdTitulo] = useState("");
   const [edData, setEdData] = useState("");
@@ -852,7 +853,6 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
   }
 
   const hoje = isoDe(new Date());
-  const inicioMes = hoje.slice(0, 8) + "01"; // YYYY-MM-01
 
   const amanhaDate = new Date(hoje + "T12:00:00");
   amanhaDate.setDate(amanhaDate.getDate() + 1);
@@ -863,16 +863,22 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
 
   const pendentesHoje = tarefas.filter((t) => t.data === hoje && t.status !== "concluida").length;
 
-  // Tarefas pendentes com data de meses anteriores viram "Atrasadas": ficam fora da
-  // lista principal (que some poluída com coisa velha) mas continuam acessíveis.
-  const atrasadas = tarefas.filter((t) => t.status !== "concluida" && t.data && t.data < inicioMes);
+  // Tarefas pendentes com data anterior a hoje viram "Atrasadas" (não só de meses
+  // passados — uma tarefa de ontem também está atrasada), e tarefas já concluídas
+  // com data passada viram "Concluídas": as duas ficam fora da lista principal (que
+  // some poluída com coisa velha) mas continuam acessíveis, recolhidas.
+  const atrasadas = tarefas.filter((t) => t.status !== "concluida" && t.data && t.data < hoje);
   const idsAtrasadas = new Set(atrasadas.map((t) => t.id));
   const restantes = tarefas.filter((t) => !idsAtrasadas.has(t.id));
-  const visiveis = filtro === "hoje" ? restantes.filter((t) => t.data === hoje) : restantes;
+
+  const concluidas = restantes.filter((t) => t.status === "concluida" && t.data && t.data < hoje);
+  const idsConcluidas = new Set(concluidas.map((t) => t.id));
+  const semConcluidas = restantes.filter((t) => !idsConcluidas.has(t.id));
+
+  const visiveis = filtro === "hoje" ? semConcluidas.filter((t) => t.data === hoje) : semConcluidas;
 
   function grupoDe(t) {
     if (!t.data) return "Sem data";
-    if (t.status === "concluida" && t.data < hoje) return "Concluídas";
     if (t.data === hoje) return "Hoje";
     if (t.data === amanha) return "Amanhã";
     if (t.data < fimSemana) return "Esta semana";
@@ -984,12 +990,21 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
         </div>
       )}
 
+      {filtro === "todas" && concluidas.length > 0 && (
+        <div className="atrasadas-bloco">
+          <button className="toggle-atrasadas" onClick={() => setMostrarConcluidas((v) => !v)}>
+            {mostrarConcluidas ? "▾" : "▸"} ✅ Concluídas ({concluidas.length})
+          </button>
+          {mostrarConcluidas && <div className="lista-tarefas">{concluidas.map(cartaoTarefa)}</div>}
+        </div>
+      )}
+
       {visiveis.length === 0 ? (
         <div className="vazio">
           {filtro === "hoje" ? (
             <p>Nada para hoje. 🎉</p>
-          ) : atrasadas.length > 0 ? (
-            <p>Nada por aqui — veja as atrasadas acima.</p>
+          ) : atrasadas.length > 0 || concluidas.length > 0 ? (
+            <p>Nada por aqui — veja acima.</p>
           ) : (
             <>
               <p>Nenhuma tarefa ainda.</p>
