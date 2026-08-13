@@ -1028,11 +1028,21 @@ function ListaTarefas({ tarefas, recarregar, setTarefas }) {
   );
 }
 
+const ORDEM_GRUPOS_CONTAS = ["Hoje", "Amanhã", "Esta semana", "Mais tarde"];
+
 function ListaContas({ contas, recarregar, setContas }) {
   const [titulo, setTitulo] = useState("");
   const [valor, setValor] = useState("");
   const [vencimento, setVencimento] = useState("");
   const [categoria, setCategoria] = useState("");
+
+  const [mostrarAtrasadas, setMostrarAtrasadas] = useState(false);
+  const [mostrarPagas, setMostrarPagas] = useState(false);
+  const [editandoId, setEditandoId] = useState(null);
+  const [edTitulo, setEdTitulo] = useState("");
+  const [edValor, setEdValor] = useState("");
+  const [edVencimento, setEdVencimento] = useState("");
+  const [edCategoria, setEdCategoria] = useState("");
 
   async function adicionar(e) {
     e.preventDefault();
@@ -1071,7 +1081,137 @@ function ListaContas({ contas, recarregar, setContas }) {
     }
   }
 
+  function iniciarEdicao(c) {
+    setEditandoId(c.id);
+    setEdTitulo(c.titulo || "");
+    setEdValor(c.valor != null ? String(c.valor) : "");
+    setEdVencimento(c.vencimento || "");
+    setEdCategoria(c.categoria || "");
+  }
+  function cancelarEdicao() {
+    setEditandoId(null);
+  }
+  async function salvarEdicao(e) {
+    e.preventDefault();
+    if (!edTitulo.trim() || !edVencimento) return;
+    const campos = {
+      titulo: edTitulo.trim(),
+      valor: edValor.trim() || null,
+      vencimento: edVencimento,
+      categoria: edCategoria.trim() || null,
+    };
+    const id = editandoId;
+    setContas((lista) => lista.map((x) => (x.id === id ? { ...x, ...campos } : x)));
+    setEditandoId(null);
+    try {
+      await atualizarConta(id, campos);
+    } finally {
+      recarregar();
+    }
+  }
+
   const hoje = isoDe(new Date());
+  const amanhaDate = new Date(hoje + "T12:00:00");
+  amanhaDate.setDate(amanhaDate.getDate() + 1);
+  const amanha = isoDe(amanhaDate);
+  const fimSemanaDate = new Date(hoje + "T12:00:00");
+  fimSemanaDate.setDate(fimSemanaDate.getDate() + 7);
+  const fimSemana = isoDe(fimSemanaDate);
+
+  // Mesma lógica das tarefas: atrasadas e pagas ficam recolhidas por padrão, o
+  // resto é agrupado por proximidade do vencimento — sem isso, contas antigas já
+  // pagas ficam poluindo a lista pra sempre.
+  const atrasadas = contas.filter((c) => c.status !== "pago" && c.vencimento < hoje);
+  const idsAtrasadas = new Set(atrasadas.map((c) => c.id));
+  const pagas = contas.filter((c) => c.status === "pago" && !idsAtrasadas.has(c.id));
+  const idsPagas = new Set(pagas.map((c) => c.id));
+  const visiveis = contas.filter((c) => !idsAtrasadas.has(c.id) && !idsPagas.has(c.id));
+
+  const somaPendente = visiveis
+    .concat(atrasadas)
+    .reduce((soma, c) => soma + (c.valor != null ? Number(c.valor) : 0), 0);
+  const totalPendentes = visiveis.length + atrasadas.length;
+
+  function grupoDe(c) {
+    if (c.vencimento === hoje) return "Hoje";
+    if (c.vencimento === amanha) return "Amanhã";
+    if (c.vencimento < fimSemana) return "Esta semana";
+    return "Mais tarde";
+  }
+  const grupos = {};
+  for (const c of visiveis) {
+    (grupos[grupoDe(c)] ||= []).push(c);
+  }
+
+  function cartaoConta(c) {
+    if (editandoId === c.id) {
+      return (
+        <form key={c.id} className="form-nota cartao-edicao" onSubmit={salvarEdicao}>
+          <input value={edTitulo} onChange={(e) => setEdTitulo(e.target.value)} autoFocus placeholder="Título" />
+          <div className="linha-conta">
+            <input
+              value={edValor}
+              onChange={(e) => setEdValor(e.target.value)}
+              placeholder="Valor (R$)"
+              inputMode="decimal"
+            />
+            <input type="date" value={edVencimento} onChange={(e) => setEdVencimento(e.target.value)} />
+          </div>
+          <input
+            value={edCategoria}
+            onChange={(e) => setEdCategoria(e.target.value)}
+            placeholder="Categoria (opcional)"
+          />
+          <div className="linha-conta">
+            <button type="submit" className="btn-principal" disabled={!edTitulo.trim() || !edVencimento}>
+              Salvar
+            </button>
+            <button type="button" className="btn-cancelar" onClick={cancelarEdicao}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      );
+    }
+    const atrasada = c.status !== "pago" && c.vencimento < hoje;
+    return (
+      <div key={c.id} className={"cartao" + (c.status === "pago" ? " feita" : "") + (atrasada ? " atrasada" : "")}>
+        <button className="check" onClick={() => alternarPaga(c)} title="Marcar como paga">
+          {c.status === "pago" ? "☑" : "☐"}
+        </button>
+        <div className="corpo">
+          <div className="titulo">{c.titulo}</div>
+          <div className="meta">
+            <span>📅 {formatarData(c.vencimento)}</span>
+            {c.valor != null && <span className="cat">R$ {Number(c.valor).toFixed(2)}</span>}
+            {c.categoria && <span className="cat">{c.categoria}</span>}
+            {atrasada && <span className="alta">atrasada</span>}
+          </div>
+        </div>
+        <div className="acoes">
+          <button
+            className="add-calendario"
+            onClick={() =>
+              baixarICS({
+                titulo: `💰 ${c.titulo}`,
+                data: c.vencimento,
+                descricao: c.valor != null ? `Valor: R$ ${Number(c.valor).toFixed(2)}` : "",
+              })
+            }
+            title="Adicionar ao Calendário do iPhone"
+          >
+            📅
+          </button>
+          <button className="editar" onClick={() => iniciarEdicao(c)} title="Editar">
+            ✏️
+          </button>
+          <button className="apagar" onClick={() => remover(c)} title="Apagar">
+            🗑
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="sub-painel">
@@ -1102,48 +1242,44 @@ function ListaContas({ contas, recarregar, setContas }) {
           <p className="dica">Peça na aba Conversa: "anota que tenho que pagar o IPTU dia 10".</p>
         </div>
       ) : (
-        <div className="lista-tarefas">
-          {contas.map((c) => {
-            const atrasada = c.status !== "pago" && c.vencimento < hoje;
-            return (
-              <div
-                key={c.id}
-                className={"cartao" + (c.status === "pago" ? " feita" : "") + (atrasada ? " atrasada" : "")}
-              >
-                <button className="check" onClick={() => alternarPaga(c)} title="Marcar como paga">
-                  {c.status === "pago" ? "☑" : "☐"}
-                </button>
-                <div className="corpo">
-                  <div className="titulo">{c.titulo}</div>
-                  <div className="meta">
-                    <span>📅 {formatarData(c.vencimento)}</span>
-                    {c.valor != null && <span className="cat">R$ {Number(c.valor).toFixed(2)}</span>}
-                    {c.categoria && <span className="cat">{c.categoria}</span>}
-                    {atrasada && <span className="alta">atrasada</span>}
-                  </div>
-                </div>
-                <div className="acoes">
-                  <button
-                    className="add-calendario"
-                    onClick={() =>
-                      baixarICS({
-                        titulo: `💰 ${c.titulo}`,
-                        data: c.vencimento,
-                        descricao: c.valor != null ? `Valor: R$ ${Number(c.valor).toFixed(2)}` : "",
-                      })
-                    }
-                    title="Adicionar ao Calendário do iPhone"
-                  >
-                    📅
-                  </button>
-                  <button className="apagar" onClick={() => remover(c)} title="Apagar">
-                    🗑
-                  </button>
-                </div>
+        <>
+          <div className="contador-tarefas">
+            {totalPendentes > 0
+              ? `R$ ${somaPendente.toFixed(2)} em ${totalPendentes} conta${totalPendentes === 1 ? "" : "s"} pendente${totalPendentes === 1 ? "" : "s"}`
+              : "Nenhuma conta pendente 🎉"}
+          </div>
+
+          {atrasadas.length > 0 && (
+            <div className="atrasadas-bloco">
+              <button className="toggle-atrasadas" onClick={() => setMostrarAtrasadas((v) => !v)}>
+                {mostrarAtrasadas ? "▾" : "▸"} ⚠️ Atrasadas ({atrasadas.length})
+              </button>
+              {mostrarAtrasadas && <div className="lista-tarefas">{atrasadas.map(cartaoConta)}</div>}
+            </div>
+          )}
+
+          {pagas.length > 0 && (
+            <div className="atrasadas-bloco">
+              <button className="toggle-atrasadas" onClick={() => setMostrarPagas((v) => !v)}>
+                {mostrarPagas ? "▾" : "▸"} ✅ Pagas ({pagas.length})
+              </button>
+              {mostrarPagas && <div className="lista-tarefas">{pagas.map(cartaoConta)}</div>}
+            </div>
+          )}
+
+          {visiveis.length === 0 ? (
+            <div className="vazio">
+              <p>Nada por aqui — veja acima.</p>
+            </div>
+          ) : (
+            ORDEM_GRUPOS_CONTAS.filter((g) => grupos[g]?.length).map((g) => (
+              <div key={g} className="grupo-tarefas">
+                <div className="grupo-titulo">{g}</div>
+                <div className="lista-tarefas">{grupos[g].map(cartaoConta)}</div>
               </div>
-            );
-          })}
-        </div>
+            ))
+          )}
+        </>
       )}
     </div>
   );
