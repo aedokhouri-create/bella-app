@@ -2301,10 +2301,29 @@ function ArquivosNota({ pin, nota }) {
 
   async function baixar(arquivoId) {
     const { base64, tipoMime, nomeOriginal } = await cofreBaixarArquivo(pin, nota.id, arquivoId);
-    const link = document.createElement("a");
-    link.href = `data:${tipoMime || "application/octet-stream"};base64,${base64}`;
-    link.download = nomeOriginal || "arquivo";
-    link.click();
+    const bytes = atob(base64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const mime = tipoMime || "application/octet-stream";
+    const nome = nomeOriginal || "arquivo";
+    const blob = new Blob([arr], { type: mime });
+
+    // No iPhone (e em qualquer PWA), um link <a download> com data-URI quase
+    // nunca abre/salva de verdade — o menu nativo de compartilhar é bem mais
+    // confiável (a pessoa escolhe abrir, salvar em Arquivos, etc.).
+    const file = new File([blob], nome, { type: mime });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: nome });
+        return;
+      } catch (err) {
+        if (err?.name === "AbortError") return; // usuário cancelou o menu — não faz nada
+        // outro erro do compartilhar -> tenta o jeito de baixo
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   async function apagar(arquivoId) {
