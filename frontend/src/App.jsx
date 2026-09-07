@@ -2299,18 +2299,31 @@ function ArquivosNota({ pin, nota }) {
     if (falhas) alert(`Não consegui anexar ${falhas} arquivo(s). Tenta de novo com esses.`);
   }
 
-  async function baixar(arquivoId) {
+  async function buscarBlob(arquivoId) {
     const { base64, tipoMime, nomeOriginal } = await cofreBaixarArquivo(pin, nota.id, arquivoId);
     const bytes = atob(base64);
     const arr = new Uint8Array(bytes.length);
     for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
     const mime = tipoMime || "application/octet-stream";
     const nome = nomeOriginal || "arquivo";
-    const blob = new Blob([arr], { type: mime });
+    return { blob: new Blob([arr], { type: mime }), mime, nome };
+  }
 
-    // No iPhone (e em qualquer PWA), um link <a download> com data-URI quase
-    // nunca abre/salva de verdade — o menu nativo de compartilhar é bem mais
-    // confiável (a pessoa escolhe abrir, salvar em Arquivos, etc.).
+  // Só abre pra ver — sempre numa aba nova, o navegador mostra a imagem/PDF
+  // com o visualizador nativo dele.
+  async function visualizar(arquivoId) {
+    const { blob } = await buscarBlob(arquivoId);
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
+  // Salvar/compartilhar é uma ação separada de "ver" — no iPhone (e em
+  // qualquer PWA), um link <a download> com data-URI quase nunca salva de
+  // verdade; o menu nativo de compartilhar é bem mais confiável (a pessoa
+  // escolhe salvar em Arquivos, mandar por WhatsApp, etc.).
+  async function baixar(arquivoId) {
+    const { blob, mime, nome } = await buscarBlob(arquivoId);
     const file = new File([blob], nome, { type: mime });
     if (navigator.canShare?.({ files: [file] })) {
       try {
@@ -2345,7 +2358,8 @@ function ArquivosNota({ pin, nota }) {
             <div key={a.id} className="arquivo-item">
               <span>📄 {a.nome_original || "arquivo"}</span>
               <div className="arquivo-acoes">
-                <button type="button" onClick={() => baixar(a.id)} title="Baixar">⬇️</button>
+                <button type="button" onClick={() => visualizar(a.id)} title="Ver">👁️</button>
+                <button type="button" onClick={() => baixar(a.id)} title="Salvar / Compartilhar">⬇️</button>
                 <button type="button" onClick={() => apagar(a.id)} title="Apagar">🗑</button>
               </div>
             </div>
