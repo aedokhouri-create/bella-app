@@ -135,8 +135,8 @@ async function buscarOuCriarPaciente({ nome, cpf, nascimento, telefone, email })
   return { paciente: novo, novo: true };
 }
 
-// Mesma lógica do Registro Rápido: procura cirurgia AGENDADA/AUTORIZADA do mesmo
-// paciente (hoje ou sem data) para atualizar para REALIZADA; senão cria nova.
+// Procura cirurgia ativa (não cancelada) do mesmo paciente e médico, na mesma data
+// (ou sem data) e com procedimento parecido, para atualizar para REALIZADA; senão cria nova.
 async function registrarCirurgia({
   pacienteId,
   medicoId,
@@ -148,12 +148,17 @@ async function registrarCirurgia({
   observacoes,
 }) {
   const hoje = new Date().toISOString().split("T")[0];
+  const alvo = data || hoje;
   const cirurgias = await cmotFetch("/cirurgias");
   const existente = cirurgias.find((c) => {
     if (c.paciente_id !== pacienteId) return false;
-    if (c.status !== "AGENDADA" && c.status !== "AUTORIZADA") return false;
+    // Qualquer cirurgia ativa conta (inclusive PENDENTE_AUTORIZACAO e REALIZADA) —
+    // antes só AGENDADA/AUTORIZADA eram reaproveitadas e o resto virava duplicata.
+    if (c.status === "CANCELADA") return false;
+    // Médicos diferentes são cirurgias diferentes, mesmo com paciente e dia iguais.
+    if (c.medico_id !== medicoId) return false;
     const dataC = c.data_prevista ? c.data_prevista.split("T")[0] : null;
-    if (!(!dataC || dataC === hoje)) return false;
+    if (dataC && dataC !== alvo) return false;
     // Mesmo paciente pode ter mais de um pedido ativo (ex.: segundo tempo cirúrgico) —
     // só trata como a mesma cirurgia se o procedimento também bater.
     return procedimentosParecidos(c.procedimento, procedimento);
