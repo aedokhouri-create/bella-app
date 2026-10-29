@@ -15,7 +15,7 @@ import { gerarDocumentoDocx } from "./documentos.js";
 import { cadastrarCirurgiaNoCmot, listarCirurgiasDoDia } from "./cmot.js";
 import { sincronizarTarefaApple, sincronizarContaApple, sincronizarTarefaGoogle, sincronizarContaGoogle } from "./calendarioSync.js";
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
 
 // Cliente criado sob demanda para dar uma mensagem clara se faltar a chave.
 // A chave é "limpa" de qualquer caractere fora do ASCII visível (espaços, quebras
@@ -509,7 +509,11 @@ export async function conversar({ message, history, imagem }) {
 
   let resp;
   for (let volta = 0; volta < 4; volta++) {
-    resp = await client.messages.create({
+    // Fallback automático no servidor: se o modelo recusar um pedido por engano
+    // (classificadores de segurança), a Anthropic tenta de novo em outro modelo.
+    resp = await client.beta.messages.create({
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
       model: MODEL,
       max_tokens: 4096, // relatórios/documentos gerados podem ser longos
       system: sistema(memoriasAtuais, modelosAtuais),
@@ -646,6 +650,19 @@ export async function conversar({ message, history, imagem }) {
     }
     messages.push({ role: "assistant", content: resp.content });
     messages.push({ role: "user", content: toolResults });
+  }
+
+  if (resp.stop_reason === "refusal") {
+    return {
+      reply: "Não consegui responder esse pedido. Tente explicar de outro jeito.",
+      tarefas: tarefasCriadas,
+      contas: contasCriadas,
+      acoesWhatsApp,
+      documentos: documentosGerados,
+      cmot: cmotResultados,
+      memorias: memoriasSalvas,
+      modelos: modelosSalvos,
+    };
   }
 
   const reply = resp.content

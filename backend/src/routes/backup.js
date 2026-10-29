@@ -5,21 +5,26 @@
 import { Router } from "express";
 import fs from "node:fs";
 import path from "node:path";
+import { gerarCopiaDoBanco, apagarCopia, estadoBackupNuvem } from "../backupBanco.js";
 
 const router = Router();
 const DATA_DIR = process.env.DATA_DIR || "./data";
 const DB_PATH = path.join(DATA_DIR, "nina.db");
 
-router.get("/", (req, res) => {
+// Baixa uma cópia íntegra (feita na hora pela API de backup do SQLite) — copiar o
+// arquivo direto podia sair sem as últimas alterações, que ficam no WAL.
+router.get("/", async (req, res) => {
   if (!fs.existsSync(DB_PATH)) {
     return res.status(404).json({ erro: "Banco de dados ainda não foi criado." });
   }
   const hoje = new Date().toISOString().slice(0, 10);
-  const tamanho = fs.statSync(DB_PATH).size;
+  const copia = await gerarCopiaDoBanco();
   res.setHeader("Content-Type", "application/octet-stream");
   res.setHeader("Content-Disposition", `attachment; filename="bella-backup-${hoje}.db"`);
-  res.setHeader("Content-Length", tamanho);
-  fs.createReadStream(DB_PATH).pipe(res);
+  res.setHeader("Content-Length", fs.statSync(copia).size);
+  const leitura = fs.createReadStream(copia);
+  leitura.on("close", () => apagarCopia(copia));
+  leitura.pipe(res);
 });
 
 // Só informações (tamanho, data), sem baixar — para mostrar na tela.
@@ -34,6 +39,7 @@ router.get("/info", (req, res) => {
     tamanhoLegivel: formatarTamanho(stat.size),
     modificadoEm: stat.mtime,
     emailAtivo: !!(process.env.BACKUP_EMAIL_USER && process.env.BACKUP_EMAIL_PASS),
+    ...estadoBackupNuvem(),
   });
 });
 

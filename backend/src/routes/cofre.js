@@ -27,7 +27,42 @@ import { derivarChave, criptografar, descriptografar, estaCriptografado } from "
 
 const router = Router();
 const CHAVE_PIN = "cofre_pin";
-const PIN_MINIMO = 4;
+// PINs novos (ou trocados) precisam de 6 dígitos; um PIN antigo de 4 continua
+// abrindo até ser trocado.
+const PIN_MINIMO = 6;
+
+// Trava contra tentativa e erro: 5 PINs errados bloqueiam o cofre por 15 minutos.
+// Sem isso, um PIN de 4 dígitos (10 mil combinações) caía em poucos minutos.
+const TENTATIVAS_MAX = 5;
+const BLOQUEIO_MS = 15 * 60 * 1000;
+const falhasPin = { n: 0, ultima: 0 };
+
+function minutosBloqueado() {
+  if (falhasPin.n < TENTATIVAS_MAX) return 0;
+  const resta = falhasPin.ultima + BLOQUEIO_MS - Date.now();
+  if (resta <= 0) {
+    falhasPin.n = 0;
+    return 0;
+  }
+  return Math.ceil(resta / 60000);
+}
+
+// Confere o PIN contando os erros. Devolve null se der certo, ou a resposta de erro.
+function checarPin(pin) {
+  const minutos = minutosBloqueado();
+  if (minutos > 0) {
+    return { status: 429, erro: `Muitos PINs errados. O cofre abre de novo em ${minutos} minuto(s).` };
+  }
+  if (conferePin(pin, getConfig(CHAVE_PIN))) {
+    falhasPin.n = 0;
+    return null;
+  }
+  const agora = Date.now();
+  if (agora - falhasPin.ultima > BLOQUEIO_MS) falhasPin.n = 0;
+  falhasPin.n++;
+  falhasPin.ultima = agora;
+  return { status: 401, erro: "PIN inválido." };
+}
 
 function hashVerificacao(pin, salt) {
   return crypto.scryptSync(String(pin), `${salt}:verify`, 32).toString("hex");
@@ -54,9 +89,8 @@ function chaveAtual(pin) {
 // Middleware: exige PIN válido no cabeçalho para acessar as notas.
 function exigePin(req, res, next) {
   const pin = req.get("x-cofre-pin");
-  if (!conferePin(pin, getConfig(CHAVE_PIN))) {
-    return res.status(401).json({ erro: "PIN inválido." });
-  }
+  const falha = checarPin(pin);
+  if (falha) return res.status(falha.status).json({ erro: falha.erro });
   req.cofrePin = pin;
   next();
 }
@@ -77,9 +111,8 @@ router.post("/definir", (req, res) => {
 
   if (atualArmazenado) {
     // Troca de PIN: precisa confirmar o atual, e recriptografar tudo com o novo.
-    if (!conferePin(pinAtual, atualArmazenado)) {
-      return res.status(401).json({ erro: "PIN atual incorreto." });
-    }
+    const falha = checarPin(pinAtual);
+    if (falha) return res.status(falha.status).json({ erro: falha.status === 401 ? "PIN atual incorreto." : falha.erro });
     const chaveAntiga = chaveAtual(pinAtual);
     const novoSalt = crypto.randomBytes(16).toString("hex");
     const chaveNova = derivarChave(pin, novoSalt, "enc");
@@ -119,7 +152,9 @@ router.post("/definir", (req, res) => {
 // Verifica o PIN (para desbloquear).
 router.post("/verificar", (req, res) => {
   const { pin } = req.body || {};
-  res.json({ ok: conferePin(pin, getConfig(CHAVE_PIN)) });
+  const falha = checarPin(pin);
+  if (falha?.status === 429) return res.status(429).json({ erro: falha.erro });
+  res.json({ ok: !falha });
 });
 
 // Notas (protegidas por PIN e criptografadas em repouso).

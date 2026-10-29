@@ -1550,6 +1550,48 @@ function PainelBackup({ fechar, abrirSobre }) {
             {info.emailAtivo ? "ativo" : "não configurado"}
           </p>
         )}
+        {info && info.existe && (
+          <p className="dica">
+            {info.nuvemAtiva ? "🟢" : "⚪️"} Backup diário na nuvem (Backblaze) —{" "}
+            {info.nuvemAtiva
+              ? info.ultimoBackupNuvem
+                ? `último em ${new Date(info.ultimoBackupNuvem).toLocaleString("pt-BR")}`
+                : "ativo, primeira cópia em instantes"
+              : "não configurado"}
+            {info.erroBackupNuvem && (
+              <>
+                <br />⚠️ Última falha: {info.erroBackupNuvem}
+              </>
+            )}
+          </p>
+        )}
+
+        <hr className="separador" />
+
+        <strong>🔐 Acesso</strong>
+        <p className="dica">
+          A Bella pede senha ou Face ID para entrar. Se perder o celular, use "Sair de todos os
+          aparelhos" em outro aparelho.
+        </p>
+        <button
+          className="btn-secundario"
+          onClick={async () => {
+            await fetch("/api/auth/sair", { method: "POST" }).catch(() => {});
+            window.location.reload();
+          }}
+        >
+          Sair neste aparelho
+        </button>{" "}
+        <button
+          className="btn-secundario"
+          onClick={async () => {
+            if (!window.confirm("Sair da Bella em todos os aparelhos? Você vai precisar entrar de novo em cada um.")) return;
+            await fetch("/api/auth/sair-de-todos", { method: "POST" }).catch(() => {});
+            window.location.reload();
+          }}
+        >
+          Sair de todos os aparelhos
+        </button>
 
         <hr className="separador" />
 
@@ -1967,7 +2009,7 @@ function Cofre() {
   async function criarPin(e) {
     e.preventDefault();
     setErro("");
-    if (entrada.length < 4) return setErro("O PIN precisa ter pelo menos 4 dígitos.");
+    if (entrada.length < 6) return setErro("O PIN precisa ter pelo menos 6 dígitos.");
     if (entrada !== confirma) return setErro("Os PINs não são iguais.");
     try {
       await cofreDefinir(entrada);
@@ -1984,8 +2026,24 @@ function Cofre() {
       const r = await cofreVerificar(entrada);
       if (r.ok) await abrirCom(entrada);
       else setErro("PIN incorreto.");
-    } catch {
-      setErro("Erro ao verificar o PIN.");
+    } catch (err) {
+      setErro(err.message || "Erro ao verificar o PIN.");
+    }
+  }
+
+  // Troca o PIN: o servidor recriptografa todas as notas com o novo.
+  async function trocarPin() {
+    const novo = (window.prompt("Novo PIN (mínimo 6 dígitos):") || "").replace(/\D/g, "");
+    if (!novo) return;
+    if (novo.length < 6) return window.alert("O PIN precisa ter pelo menos 6 dígitos.");
+    const repetido = (window.prompt("Digite o novo PIN de novo:") || "").replace(/\D/g, "");
+    if (repetido !== novo) return window.alert("Os PINs não são iguais. Nada foi trocado.");
+    try {
+      await cofreDefinir(novo, pin);
+      setPin(novo);
+      window.alert("PIN trocado.");
+    } catch (err) {
+      window.alert(err.message || "Não consegui trocar o PIN.");
     }
   }
 
@@ -2077,7 +2135,7 @@ function Cofre() {
             type="password"
             inputMode="numeric"
             autoComplete="off"
-            placeholder="PIN (mín. 4 dígitos)"
+            placeholder={criar ? "PIN (mín. 6 dígitos)" : "PIN"}
             value={entrada}
             onChange={(e) => setEntrada(e.target.value.replace(/\D/g, ""))}
           />
@@ -2186,10 +2244,18 @@ function Cofre() {
         ) : (
           <span>🔓 Cofre aberto</span>
         )}
-        <button className="trancar" onClick={trancar}>
-          Trancar
-        </button>
+        <div>
+          <button className="trancar" onClick={trocarPin}>
+            Trocar PIN
+          </button>{" "}
+          <button className="trancar" onClick={trancar}>
+            Trancar
+          </button>
+        </div>
       </div>
+      {pin.length < 6 && (
+        <p className="dica">⚠️ Seu PIN tem menos de 6 dígitos. Toque em "Trocar PIN" para deixar o cofre mais seguro.</p>
+      )}
 
       <input
         className="busca-cofre"

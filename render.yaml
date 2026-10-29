@@ -19,12 +19,24 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: ANTHROPIC_MODEL
-        value: claude-opus-4-8
+        value: claude-opus-5-5
       - key: CMOT_BASE_URL
         value: https://cmot-app.onrender.com
       - key: CMOT_EMAIL
         sync: false
       - key: CMOT_SENHA
+        sync: false
+      # Senha de entrada da Bella. Opcional: sem ela, vale a mesma do CMOT (CMOT_SENHA).
+      - key: BELLA_SENHA
+        sync: false
+      # Backblaze para o backup diário do banco — podem ser os mesmos valores do CMOT.
+      - key: B2_ENDPOINT
+        sync: false
+      - key: B2_KEY_ID
+        sync: false
+      - key: B2_APP_KEY
+        sync: false
+      - key: B2_BUCKET
         sync: false
       - key: GOOGLE_TTS_API_KEY
         sync: false

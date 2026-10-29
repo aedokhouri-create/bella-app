@@ -1,6 +1,5 @@
 import "dotenv/config";
 import express from "express";
-import cors from "cors";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,14 +16,17 @@ import modelosRouter from "./routes/modelos.js";
 import calendarioRouter from "./routes/calendario.js";
 import pushRouter from "./routes/push.js";
 import { iniciarTarefasAgendadas } from "./tarefasAgendadas.js";
+import authRouter, { exigeLogin } from "./auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
-app.use(cors());
 app.use(express.json({ limit: "15mb" })); // fotos em base64 para a leitura por IA
 
 app.get("/api/health", (req, res) => res.json({ ok: true, app: "Bella" }));
+app.use("/api/auth", authRouter);
+// Daqui pra baixo, toda rota da API exige estar logado.
+app.use("/api", exigeLogin);
 app.use("/api/tarefas", tarefasRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/cofre", cofreRouter);

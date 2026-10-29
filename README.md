@@ -64,7 +64,7 @@ As tarefas aparecem na aba **Tarefas**.
 | Variável | Para que serve |
 |---|---|
 | `ANTHROPIC_API_KEY` | Sua chave da IA (obrigatória para o chat) |
-| `ANTHROPIC_MODEL` | Modelo da IA. Padrão `claude-opus-4-8`. Para gastar menos: `claude-haiku-4-5` |
+| `ANTHROPIC_MODEL` | Modelo da IA. Padrão `claude-opus-5-5`. Para gastar menos: `claude-haiku-5-5` |
 | `PORT` | Porta do backend (padrão 3001) |
 | `DATA_DIR` | Onde o banco é salvo (padrão `./data`) |
 
