@@ -135,8 +135,8 @@ async function buscarOuCriarPaciente({ nome, cpf, nascimento, telefone, email })
   return { paciente: novo, novo: true };
 }
 
-// Procura cirurgia ativa (não cancelada) do mesmo paciente e médico, na mesma data
-// (ou sem data) e com procedimento parecido, para atualizar para REALIZADA; senão cria nova.
+// Procura o pedido aberto (ou a cirurgia já realizada no mesmo dia) do paciente com
+// procedimento parecido, para atualizar para REALIZADA; senão cria nova.
 async function registrarCirurgia({
   pacienteId,
   medicoId,
@@ -148,31 +148,42 @@ async function registrarCirurgia({
   observacoes,
 }) {
   const hoje = new Date().toISOString().split("T")[0];
-  const alvo = data || hoje;
+  const alvo = String(data || hoje).slice(0, 10);
   const cirurgias = await cmotFetch("/cirurgias");
-  const existente = cirurgias.find((c) => {
-    if (c.paciente_id !== pacienteId) return false;
-    // Qualquer cirurgia ativa conta (inclusive PENDENTE_AUTORIZACAO e REALIZADA) —
-    // antes só AGENDADA/AUTORIZADA eram reaproveitadas e o resto virava duplicata.
-    if (c.status === "CANCELADA") return false;
-    // Médicos diferentes são cirurgias diferentes, mesmo com paciente e dia iguais.
-    if (c.medico_id !== medicoId) return false;
-    const dataC = c.data_prevista ? c.data_prevista.split("T")[0] : null;
-    if (dataC && dataC !== alvo) return false;
-    // Mesmo paciente pode ter mais de um pedido ativo (ex.: segundo tempo cirúrgico) —
-    // só trata como a mesma cirurgia se o procedimento também bater.
-    return procedimentosParecidos(c.procedimento, procedimento);
-  });
+  // Pedido aberto (pendente, autorizada ou agendada): a data planejada raramente é o
+  // dia em que a cirurgia acontece — vale até 120 dias de diferença. Cirurgia já
+  // REALIZADA só é a mesma se for do mesmo dia (registro repetido). Mesma regra do
+  // Registro Rápido do CMOT.
+  const diasAte = (d) => Math.abs(new Date(d.slice(0, 10)) - new Date(alvo)) / 86400000;
+  const existente = cirurgias
+    .filter((c) => {
+      if (c.paciente_id !== pacienteId) return false;
+      if (c.status === "CANCELADA") return false;
+      const dataC = c.data_prevista ? c.data_prevista.split("T")[0] : null;
+      if (c.status === "REALIZADA") {
+        if (dataC !== alvo) return false;
+      } else if (dataC && diasAte(dataC) > 120) return false;
+      // Mesmo paciente pode ter mais de um pedido ativo (ex.: segundo tempo cirúrgico) —
+      // só trata como a mesma cirurgia se o procedimento também bater.
+      return procedimentosParecidos(c.procedimento, procedimento);
+    })
+    // Preferência: pedido aberto, do mesmo médico, com a data mais próxima.
+    .sort((a, b) => {
+      const peso = (c) => (c.status === "REALIZADA" ? 2 : 0) + (c.medico_id === medicoId ? 0 : 1);
+      if (peso(a) !== peso(b)) return peso(a) - peso(b);
+      return diasAte(a.data_prevista || alvo) - diasAte(b.data_prevista || alvo);
+    })[0];
 
   if (existente) {
     const atualizada = await cmotFetch(`/cirurgias/${existente.id}`, {
       method: "PUT",
       body: JSON.stringify({
         ...existente,
+        medico_id: medicoId,
         procedimento: procedimento || existente.procedimento,
         hospital: hospital || existente.hospital,
         convenio: convenio || existente.convenio,
-        data_prevista: data || existente.data_prevista || hoje,
+        data_prevista: alvo,
         observacoes: observacoes
           ? existente.observacoes
             ? `${existente.observacoes}\n\n${observacoes}`
