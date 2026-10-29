@@ -8,6 +8,7 @@ import { enviarEmail } from "./email.js";
 import { enviarPush, pushAtivo } from "./push.js";
 import { listarTarefas, listarContas, avancarTarefasRecorrentes, apagarTarefasConcluidasAntigas } from "./db.js";
 import { listarCirurgiasDoDia } from "./cmot.js";
+import { gerarCopiaDoBanco, apagarCopia, backupParaNuvem, nuvemAtiva } from "./backupBanco.js";
 
 const DATA_DIR = process.env.DATA_DIR || "./data";
 const DB_PATH = path.join(DATA_DIR, "nina.db");
@@ -17,7 +18,9 @@ const FUSO = "America/Bahia";
 async function rodarBackupSemanal() {
   if (!fs.existsSync(DB_PATH)) return;
   const hoje = new Date().toLocaleDateString("pt-BR", { timeZone: FUSO });
+  let copia;
   try {
+    copia = await gerarCopiaDoBanco();
     await enviarEmail({
       para: EMAIL_DESTINO,
       assunto: `Backup semanal da Bella — ${hoje}`,
@@ -25,11 +28,13 @@ async function rodarBackupSemanal() {
         "Segue em anexo o backup do banco de dados da Bella (tarefas, contas, contatos, " +
         "cofre criptografado, memórias). Guarde este e-mail — é sua cópia de segurança " +
         "semanal automática.",
-      anexos: [{ filename: `bella-backup-${hoje.replace(/\//g, "-")}.db`, path: DB_PATH }],
+      anexos: [{ filename: `bella-backup-${hoje.replace(/\//g, "-")}.db`, path: copia }],
     });
     console.log(`[agendado] Backup semanal enviado para ${EMAIL_DESTINO}`);
   } catch (err) {
     console.error("[agendado] Erro ao enviar backup semanal:", err.message);
+  } finally {
+    if (copia) apagarCopia(copia);
   }
 }
 
@@ -121,6 +126,14 @@ export function iniciarTarefasAgendadas() {
   }
   manutencaoDiaria();
   cron.schedule("5 0 * * *", manutencaoDiaria, { timezone: FUSO });
+
+  // Backup diário no Backblaze às 3h, e uma vez 1 minuto depois de subir (deploy).
+  if (nuvemAtiva()) {
+    cron.schedule("0 3 * * *", backupParaNuvem, { timezone: FUSO });
+    setTimeout(backupParaNuvem, 60_000);
+  } else {
+    console.log("[agendado] B2_* não configurados — backup diário na nuvem desativado.");
+  }
 
   const emailAtivo = process.env.BACKUP_EMAIL_USER && process.env.BACKUP_EMAIL_PASS;
 
